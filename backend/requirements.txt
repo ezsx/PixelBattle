@@ -1,0 +1,12 @@
+fastapi[all]
+websockets
+psycopg[binary]
+psycopg[pool]
+httpx
+pydantic-settings
+python-jose[cryptography]
+passlib
+uvicorn
+pytest
+pytest-asyncio
+itsdangerous

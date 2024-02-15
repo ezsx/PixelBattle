@@ -1,0 +1,23 @@
+@startuml
+participant Клиент
+participant Сервер
+autonumber
+Клиент->Сервер: Подключение к WebSocket
+activate Сервер
+
+Клиент->Сервер: Отправка {"nickname": "user_nickname", "user_id": "optional_uuid"}
+activate Сервер
+
+alt если "user_id" отсутствует
+    Сервер->Сервер: Создание нового пользователя с "nickname"
+    Сервер->Клиент: Возврат {"user_id": "сгенерированный_uuid"}
+else "user_id" присутствует
+    Сервер->Сервер: Проверка существующего "user_id" и "nickname"
+    alt если "nickname" отличается
+        Сервер->Сервер: Обновление "nickname" пользователя
+    end
+    Сервер->Клиент: Подтверждение существующего "user_id"
+end
+
+deactivate Сервер
+@enduml

@@ -5,7 +5,7 @@ from common.app.db.db_pool import get_pool_cur
 
 """
 The init_db function creates the necessary tables in the database if they don't already exist.
-It executes a series of CREATE TABLE statements for the Users, Tasks, and User_Tasks tables.
+It executes a series of CREATE TABLE statements for the pixels, admins, and users tables.
 Finally, it commits the changes to the database. 
 """
 

@@ -24,8 +24,6 @@ async def close_pool():
 
 
 def get_pool():
-    if pool is None:
-        init_pool()
     return pool
 
 

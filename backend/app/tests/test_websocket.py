@@ -1,14 +1,17 @@
 import asyncio
 import ssl
-import websockets
+import websockets as client_websockets
 from websockets.sync.client import connect
 import json
+from common.app.db.api_db import clear_db
+from common.app.db.db_pool import init_pool
+from common.app.core.config import config as cfg_c
 
-uri = "ws://localhost:8000/ws/"  # Замените на актуальный адрес вашего WebSocket сервера
+uri = "ws://localhost:8000/ws/"  # адрес  WebSocket сервера
 
 
 async def test_create_new_user():
-    async with websockets.connect(uri) as websocket:
+    async with client_websockets.connect(uri) as websocket:
         await websocket.send(json.dumps({"nickname": "NewUser"}))
 
         try:
@@ -21,38 +24,33 @@ async def test_create_new_user():
                 # if some_condition:
                 #     break
 
-        except websockets.exceptions.ConnectionClosedOK:
+        except client_websockets.exceptions.ConnectionClosedOK:
             print("Connection closed by the server")
-        except websockets.exceptions.ConnectionClosedError as e:
+        except client_websockets.exceptions.ConnectionClosedError as e:
             print(f"Connection closed with error: {e}")
 
 
-async def test_authenticate_existing_user():
-    async with websockets.connect(uri) as websocket:
-        await websocket.send(json.dumps({"nickname": "ExistingUser", "user_id": "existing-user-id"}))
+async def test_new_user_without_user_id():
+    async with client_websockets.connect(uri) as websocket:
+        # Отправляем данные нового пользователя с nickname, но без user_id
+        await websocket.send(json.dumps({"nickname": "NewUser"}))
+
+        # Ожидаем ответа от сервера
         response = await websocket.recv()
-        print("Ответ сервера для аутентификации существующего пользователя:", response)
+        response_data = json.loads(response)
+        # await websocket.close()
 
+        print(f"Ответ сервера: {response}")
+        # Проверяем, получен ли user_id в ответе
+        assert "user_id" in response_data, "user_id не получен в ответе от сервера"
 
-async def test_update_nickname():
-    async with websockets.connect(uri) as websocket:
-        await websocket.send(json.dumps({"nickname": "UpdatedUser", "user_id": "existing-user-id"}))
-        response = await websocket.recv()
-        print("Ответ сервера на обновление nickname:", response)
-
-
-async def test_invalid_user_id():
-    async with websockets.connect(uri) as websocket:
-        await websocket.send(json.dumps({"nickname": "UserWithInvalidID", "user_id": "invalid-user-id"}))
-        response = await websocket.recv()
-        print("Ответ сервера для невалидного user_id:", response)
 
 
 async def run_tests():
-    await test_create_new_user()
-    # await test_authenticate_existing_user()
-    # await test_update_nickname()
-    # await test_invalid_user_id()
+    # await test_create_new_user()
+    await init_pool(cfg=cfg_c)
+    await clear_db()
+    await test_new_user_without_user_id()
 
 
 asyncio.run(run_tests())

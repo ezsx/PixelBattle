@@ -1,25 +1,13 @@
 import asyncio
 import json
+import websockets.exceptions
 from typing import List
 from fastapi import WebSocket, FastAPI, Header, HTTPException
 from fastapi.websockets import WebSocketDisconnect
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
     create_user_with_id
-from fastapi.middleware.cors import CORSMiddleware
 
 app_ws = FastAPI()
-
-origins = [
-    "*"
-]
-app_ws.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS", "DELETE", "PATCH", "PUT"],
-    allow_headers=["*"]
-
-)
 
 
 class ConnectionManager:
@@ -52,50 +40,47 @@ manager = ConnectionManager()
 
 @app_ws.websocket("/")
 async def websocket_endpoint(websocket: WebSocket):
-    # Подключение пользователя к менеджеру соединений
-    await manager.connect(websocket)
-
-    # Ожидаем получение сообщения с данными пользователя
-    auth_data = await websocket.receive_json()
-
-    # Извлекаем nickname и user_id из полученного сообщения
-    nickname = auth_data.get('nickname')
-    user_id = auth_data.get('user_id')
-
-    if not nickname:
-        # Обработка случая, когда nickname не предоставлен
-        await websocket.close(code=4002, reason="Nickname is required")
-        return
-
-    if user_id:
-        user = await get_user_by_id(user_id)
-        if not user:
-            # Обработка случая, когда пользователь с предоставленным user_id не найден
-            await websocket.close(code=4003, reason="Invalid user_id")
-            return
-        elif user['nickname'] != nickname:
-            # Обновление nickname пользователя, если он отличается
-            await update_user_nickname(user_id, nickname)
-    else:
-        # Создание нового пользователя, если user_id не предоставлен
-        user = await create_user(nickname)
-        user_id = user['id']
-
-    if user.get('is_banned'):
-        # Обработка случая, когда пользователь забанен
-        await websocket.send_text(json.dumps({"type": "banned"}))
-        await websocket.close(code=4001)
-        return
-
-
-    # Отправка состояния игрового поля
-    await send_field_state(websocket)
-    # Отправка heartbeat сообщений
-    await asyncio.create_task(websocket_heartbeat(websocket))
-
-
-
     try:
+        # Подключение пользователя к менеджеру соединений
+        await manager.connect(websocket)
+
+        # Ожидаем получение сообщения с данными пользователя
+        auth_data = await websocket.receive_json()
+
+        # Извлекаем nickname и user_id из полученного сообщения
+        nickname = auth_data.get('nickname')
+        user_id = auth_data.get('user_id')
+
+        if not nickname:
+            # Обработка случая, когда nickname не предоставлен
+            await websocket.close(code=4002, reason="Nickname is required")
+            return
+
+        if user_id:
+            user = await get_user_by_id(user_id)
+            if not user:
+                # Обработка случая, когда пользователь с предоставленным user_id не найден
+                await websocket.close(code=4003, reason="Invalid user_id")
+                return
+            elif user['nickname'] != nickname:
+                # Обновление nickname пользователя, если он отличается
+                await update_user_nickname(user_id, nickname)
+        else:
+            # Создание нового пользователя, если user_id не предоставлен
+            user = await create_user(nickname)
+            user_id = user['id']
+
+        if user.get('is_banned'):
+            # Обработка случая, когда пользователь забанен
+            await websocket.send_text(json.dumps({"type": "banned"}))
+            await websocket.close(code=4001)
+            return
+
+        # Отправка состояния игрового поля
+        await send_field_state(websocket)
+        # Отправка heartbeat сообщений
+        await asyncio.create_task(websocket_heartbeat(websocket))
+
         while True:
             message = await websocket.receive_text()
             message_data = json.loads(message)
@@ -103,8 +88,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 await handle_update_pixel(message_data['data'], user_id)
             elif message_data['type'] == 'get_field_state':
                 await send_field_state(websocket)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
+
+    except BaseException:
+        if websocket.application_state.CONNECTED:
+            manager.disconnect(websocket)
 
 
 async def websocket_heartbeat(websocket: WebSocket):

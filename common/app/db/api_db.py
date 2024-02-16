@@ -6,6 +6,16 @@ from psycopg.rows import dict_row
 
 
 @get_pool_cur
+async def clear_db(cur: Cursor):
+    # Удаление всех записей из таблиц, начиная с таблицы, не имеющей внешних ключей
+    await cur.execute("DELETE FROM pixels;")
+    await cur.execute("DELETE FROM admins;")
+    await cur.execute("DELETE FROM users;")
+
+    await cur.execute("COMMIT;")
+
+
+@get_pool_cur
 async def create_user(cur: Cursor, nickname: str) -> dict:
     cur.row_factory = dict_row
     await cur.execute("""
@@ -54,6 +64,8 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: UUID, a
     """, (x, y, color, user_id, action_time))
 
 
+# TODO: на данный момент возразаются просто все записи о состоянии поля.
+# Структуры как таковой нет, нужно согласовать с фронтом
 @get_pool_cur
 async def get_pixels(cur: Cursor):
     cur.row_factory = dict_row

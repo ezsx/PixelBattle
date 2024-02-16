@@ -3,7 +3,7 @@ import json
 import websockets.exceptions
 from typing import List
 from fastapi import WebSocket, FastAPI, Header, HTTPException
-from fastapi.websockets import WebSocketDisconnect
+from fastapi.websockets import WebSocketDisconnect, WebSocketState
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
     create_user_with_id
 
@@ -23,9 +23,12 @@ class ConnectionManager:
         self.active_connections.append(websocket)
         await self.broadcast_online_count()
 
-    def disconnect(self, websocket: WebSocket):
+    async def disconnect(self, websocket: WebSocket, code=403, reason = "Forbiden"):
+        # Проверяем что connect закрыт
+        if websocket.application_state == WebSocketState.CONNECTED:
+            await websocket.close(code=code, reason=reason)
         self.active_connections.remove(websocket)
-        asyncio.create_task(self.broadcast_online_count())
+        await asyncio.create_task(self.broadcast_online_count())
 
     async def broadcast_online_count(self):
         online_count = len(self.active_connections)
@@ -53,14 +56,14 @@ async def websocket_endpoint(websocket: WebSocket):
 
         if not nickname:
             # Обработка случая, когда nickname не предоставлен
-            await websocket.close(code=4002, reason="Nickname is required")
+            await manager.disconnect(websocket, code=4002, reason="Nickname is required")
             return
 
         if user_id:
             user = await get_user_by_id(user_id)
             if not user:
                 # Обработка случая, когда пользователь с предоставленным user_id не найден
-                await websocket.close(code=4003, reason="Invalid user_id")
+                await manager.disconnect(websocket, code=4003, reason="Invalid user_id")
                 return
             elif user['nickname'] != nickname:
                 # Обновление nickname пользователя, если он отличается
@@ -73,7 +76,7 @@ async def websocket_endpoint(websocket: WebSocket):
         if user.get('is_banned'):
             # Обработка случая, когда пользователь забанен
             await websocket.send_text(json.dumps({"type": "banned"}))
-            await websocket.close(code=4001)
+            await manager.disconnect(websocket, code=4001, reason="Banned")
             return
 
         # Отправка состояния игрового поля
@@ -91,7 +94,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     except BaseException:
         if websocket.application_state.CONNECTED:
-            manager.disconnect(websocket)
+            await manager.disconnect(websocket, code=4004, reason="Closed")
 
 
 async def websocket_heartbeat(websocket: WebSocket):
@@ -107,7 +110,7 @@ async def handle_user_connection(websocket: WebSocket, user_id: str):
     user = await get_user_by_id(user_id)  # Функция из api_db.py для получения информации о пользователе
     if user and user['is_banned']:
         await websocket.send_text(json.dumps({"type": "banned"}))  # Опционально, сообщить пользователю о бане
-        await websocket.close(code=4001)  # Код закрытия для забаненных пользователей
+        await manager.disconnect(websocket, code=4001, reason="Banned")  # Код закрытия для забаненных пользователей
         return
     # Продолжение обработки подключения пользователя
 

@@ -55,6 +55,7 @@ async def get_user_by_id(cur: Cursor, user_id: UUID):
 
 @get_pool_cur
 async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: UUID, action_time: datetime):
+    print("update_pixel_database_func: Updating pixel")
     await cur.execute("""
         INSERT INTO pixels (x, y, color, user_id, action_time) VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (x, y) DO UPDATE
@@ -62,6 +63,7 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: UUID, a
             user_id = CASE WHEN pixels.action_time < EXCLUDED.action_time THEN EXCLUDED.user_id ELSE pixels.user_id END,
             action_time = CASE WHEN pixels.action_time < EXCLUDED.action_time THEN EXCLUDED.action_time ELSE pixels.action_time END;
     """, (x, y, color, user_id, action_time))
+    print("update_pixel_database_func: pixel updated")
 
 
 # TODO: на данный момент возразаются просто все записи о состоянии поля.

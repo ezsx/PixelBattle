@@ -9,4 +9,5 @@ passlib
 uvicorn
 pytest
 pytest-asyncio
+pytest-mock
 itsdangerous

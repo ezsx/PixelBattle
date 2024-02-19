@@ -1,56 +1,76 @@
 import asyncio
-import ssl
-import websockets as client_websockets
-from websockets.sync.client import connect
 import json
+import websockets as client_websockets
 from common.app.db.api_db import clear_db
 from common.app.db.db_pool import init_pool
 from common.app.core.config import config as cfg_c
+from datetime import datetime
 
-uri = "ws://localhost:8000/ws/"  # адрес  WebSocket сервера
+uri = "ws://localhost:8000/ws/"  # адрес WebSocket сервера
 
 
-async def test_create_new_user():
-    async with client_websockets.connect(uri) as websocket:
-        await websocket.send(json.dumps({"nickname": "NewUser"}))
+# run test command, to run inside backend.docker container:
+# python -c "import backend.app.tests.test_websocket"
 
+async def send_and_receive(websocket, message, expected_responses_count, timeout=3):
+    print(f"Отправлено на сервер: {message}")
+    await websocket.send(message)
+
+    responses = []
+    start_time = asyncio.get_event_loop().time()
+
+    while len(responses) < expected_responses_count and asyncio.get_event_loop().time() - start_time < timeout:
         try:
-            # Keep the connection open and handle incoming messages
-            while True:
-                response = await websocket.recv()
-                print("Received from server:", response)
+            response = await asyncio.wait_for(websocket.recv(), timeout=timeout)
+            responses.append(json.loads(response))
+            print(f"Received from server: {response}")
+        except asyncio.TimeoutError:
+            print("Превышено время ожидания ответа от сервера")
+            break
 
-                # You can break the loop or continue based on certain conditions
-                # if some_condition:
-                #     break
-
-        except client_websockets.exceptions.ConnectionClosedOK:
-            print("Connection closed by the server")
-        except client_websockets.exceptions.ConnectionClosedError as e:
-            print(f"Connection closed with error: {e}")
+    return responses
 
 
-async def test_new_user_without_user_id():
+async def create_user_and_login():
     async with client_websockets.connect(uri) as websocket:
-        # Отправляем данные нового пользователя с nickname, но без user_id
-        await websocket.send(json.dumps({"nickname": "NewUser"}))
+        # Создание пользователя
+        responses = await send_and_receive(websocket, json.dumps({"nickname": "NewUser"}), expected_responses_count=3)
+        user_id = responses[1]['data']  # Получаем user_id из ответа сервера
 
-        # Ожидаем ответа от сервера
-        response = await websocket.recv()
-        response_data = json.loads(response)
-        # await websocket.close()
+        # Повторное подключение для входа пользователя
+        await websocket.close()
+        return user_id
 
-        print(f"Ответ сервера: {response}")
-        # Проверяем, получен ли user_id в ответе
-        assert "user_id" in response_data, "user_id не получен в ответе от сервера"
 
+async def perform_user_actions(user_id):
+    async with client_websockets.connect(uri) as websocket:
+        # Вход пользователя
+        await send_and_receive(websocket, json.dumps({"user_id": user_id, "nickname": "NewUser"}),
+                               expected_responses_count=2)
+
+        # Создание пикселя
+        message = {
+            "type": "update_pixel",
+            "data": {
+                "x": 10,
+                "y": 20,
+                "color": '#FF5733',
+                "action_time": datetime.utcnow().isoformat()  # Добавляем временную метку в формате ISO
+            }
+        }
+        await send_and_receive(websocket, json.dumps(message), expected_responses_count=1)
+
+        # Получение состояния пикселей
+        await send_and_receive(websocket, json.dumps({"type": "get_field_state"}), expected_responses_count=1)
 
 
 async def run_tests():
-    # await test_create_new_user()
+    # TODO: исправить инициализацию пула базы
     await init_pool(cfg=cfg_c)
     await clear_db()
-    await test_new_user_without_user_id()
+
+    user_id = await create_user_and_login()
+    await perform_user_actions(user_id)
 
 
 asyncio.run(run_tests())

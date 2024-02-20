@@ -22,7 +22,7 @@ async def init_db(cur: Cursor):
     # Создание таблицы users
     await cur.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
         nickname VARCHAR(255) UNIQUE NOT NULL,
         is_banned BOOLEAN DEFAULT FALSE
     );
@@ -34,7 +34,7 @@ async def init_db(cur: Cursor):
         x INT NOT NULL,
         y INT NOT NULL,
         color VARCHAR(7) NOT NULL, -- Цвет в формате HEX, например, #FFFFFF
-        user_id UUID,
+        user_id VARCHAR(36),
         last_updated TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc'),
         action_time TIMESTAMP WITHOUT TIME ZONE,
         PRIMARY KEY (x, y),
@@ -45,7 +45,7 @@ async def init_db(cur: Cursor):
     # Создание таблицы admins
     await cur.execute("""
     CREATE TABLE IF NOT EXISTS admins (
-        id SERIAL PRIMARY KEY,
+        id VARCHAR(36) PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
         password_hash VARCHAR(255) NOT NULL
     );

@@ -30,6 +30,7 @@ def get_pool():
 def get_pool_cur(func):
     async def _inner_(*args, **kwargs):
         async with get_pool().connection() as conn:
+            await conn.set_autocommit(True)
             cursor: Cursor = conn.cursor()
             return await func(cursor, *args, **kwargs)
 

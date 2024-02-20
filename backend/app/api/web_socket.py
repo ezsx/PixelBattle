@@ -7,6 +7,7 @@ from fastapi.websockets import WebSocketDisconnect, WebSocketState
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
     create_user_with_id
 from datetime import datetime
+from starlette.websockets import WebSocketState
 
 app_ws = FastAPI()
 
@@ -20,7 +21,7 @@ class ConnectionManager:
         # Создаем копию списка активных соединений, чтобы избежать изменения списка во время итерации
         connections = self.active_connections.copy()
         for connection in connections:
-            if connection.application_state == WebSocketState.CONNECTED:
+            if connection.client_state == WebSocketState.CONNECTED:
                 try:
                     await connection.send_text(message)
                     print(f"Message sent to {connection.client}: {message}")  # DEBUG
@@ -30,7 +31,6 @@ class ConnectionManager:
                     self.active_connections.remove(connection)
 
     async def connect(self, websocket: WebSocket):
-        await websocket.accept()
         self.active_connections.append(websocket)
         print(f"User connected: {websocket.client}")  # DEBUG
         await self.broadcast_online_count()
@@ -38,8 +38,6 @@ class ConnectionManager:
     async def disconnect(self, websocket: WebSocket, code=403, reason="Forbiden"):
         if websocket in self.active_connections:
             print(f"Disconnecting: {websocket.client}, Code: {code}, Reason: {reason}")  # DEBUG
-            if websocket.application_state == WebSocketState.CONNECTED:
-                await websocket.close(code=code, reason=reason)
             self.active_connections.remove(websocket)
             # print(f"User disconnected: {websocket.client}")  # DEBUG
             await self.broadcast_online_count()
@@ -55,12 +53,8 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-@app_ws.websocket("/")
-async def websocket_endpoint(websocket: WebSocket):
+async def authenticate(websocket: WebSocket):
     try:
-        # Подключение пользователя к менеджеру соединений
-        await manager.connect(websocket)
-
         # Ожидаем получение сообщения с данными пользователя
         auth_data = await websocket.receive_json()
 
@@ -70,15 +64,14 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Server get from client data to authenticate:", nickname, " ___ ", user_id)
         if not nickname:
             # Обработка случая, когда nickname не предоставлен
-            await manager.disconnect(websocket, code=4002, reason="Nickname is required")
-            return
+            return None, (403, "Forbiden")
 
         if user_id:
             user = await get_user_by_id(user_id)
+            print("DEBUG user from get_user_by_id: ", user)
             if not user:
                 # Обработка случая, когда пользователь с предоставленным user_id не найден
-                await manager.disconnect(websocket, code=4003, reason="Invalid user_id, create a new account")
-                return
+                return None, (4004, "User not found")
             elif user['nickname'] != nickname:
                 # Обновление nickname пользователя, если он отличается
                 await update_user_nickname(user_id, nickname)
@@ -91,14 +84,33 @@ async def websocket_endpoint(websocket: WebSocket):
         if user.get('is_banned'):
             # Обработка случая, когда пользователь забанен
             await websocket.send_json({"type": "banned"})
-            await manager.disconnect(websocket, code=4001, reason="Banned")
-            return
+            return None, (403, "Forbiden")
 
-        # Отправка состояния игрового поля
-        await send_field_state(websocket)
-        # Отправка heartbeat сообщений
-        await asyncio.create_task(websocket_heartbeat(websocket))
+        return user_id, (200, "OK")
 
+    except WebSocketDisconnect:
+        return None, (1001, "Disconnected")
+
+
+@app_ws.websocket("/")
+async def websocket_endpoint(websocket: WebSocket):
+    # Подключение пользователя Websocket
+    await websocket.accept()
+
+    user_id, response = await authenticate(websocket)
+
+    # Проверяем авторизовался пользователь или нет
+    if not (user_id and response[0] == 200):
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.close(code=response[0], reason=response[1])
+        return
+    await manager.connect(websocket)
+
+    # Отправка состояния игрового поля при первом подключении
+    await send_field_state(websocket)
+
+    # Запускаем событийный цикл вебсокета
+    try:
         while True:
             message = await websocket.receive_text()
             print(f"Message received from {websocket.client}: {message}")  # DEBUG
@@ -111,31 +123,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 print("disconnect")
                 await manager.disconnect(websocket, code=1000, reason="Closed")
 
-    except BaseException:
-        # ловим принудительное отключение конетка,
-        # TODO: небезопасный код, ошибок вызывающих непредвиденное отключение, много
-        # нужно разобраться как их всех ловить без BaseException.
-        if websocket.application_state == WebSocketState.CONNECTED:
-            await manager.disconnect(websocket, code=1000, reason="Closed")
-
-
-async def websocket_heartbeat(websocket: WebSocket):
-    while True:
-        try:
-            await asyncio.sleep(30)  # Периодическое отправление сообщения каждые 30 секунд
-            await websocket.send_text(json.dumps({"type": "heartbeat"}))
-        except Exception:
-            break
-
-
-#
-# async def handle_user_connection(websocket: WebSocket, user_id: str):
-#     user = await get_user_by_id(user_id)  # Функция из api_db.py для получения информации о пользователе
-#     if user and user['is_banned']:
-#         await websocket.send_text(json.dumps({"type": "banned"}))  # Опционально, сообщить пользователю о бане
-#         await manager.disconnect(websocket, code=4001, reason="Banned")  # Код закрытия для забаненных пользователей
-#         return
-#     # Продолжение обработки подключения пользователя
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket, code=1000, reason="Closed")
 
 
 async def handle_update_pixel(data, user_id):

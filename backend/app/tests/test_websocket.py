@@ -34,7 +34,12 @@ async def send_and_receive(websocket, message, expected_responses_count, timeout
 async def create_user_and_login():
     async with client_websockets.connect(uri) as websocket:
         # Создание пользователя
-        responses = await send_and_receive(websocket, json.dumps({"nickname": "NewUser"}), expected_responses_count=3)
+        responses = await send_and_receive(websocket, json.dumps(
+            {"type": "login",
+             "data":
+                 {"nickname": "NewUser"}
+             }
+        ), expected_responses_count=3)
         user_id = responses[0]['data']  # Получаем user_id из ответа сервера
 
         # Повторное подключение для входа пользователя
@@ -45,7 +50,11 @@ async def create_user_and_login():
 async def perform_user_actions(user_id):
     async with client_websockets.connect(uri) as websocket:
         # Вход пользователя
-        await send_and_receive(websocket, json.dumps({"user_id": user_id, "nickname": "NewUser"}),
+        await send_and_receive(websocket, json.dumps(
+            {"type": "login",
+             "data":
+                 {"user_id": user_id, "nickname": "NewUser"}
+             }),
                                expected_responses_count=2)
 
         # Создание пикселя
@@ -54,8 +63,7 @@ async def perform_user_actions(user_id):
             "data": {
                 "x": 10,
                 "y": 20,
-                "color": '#FF5733',
-                "action_time": datetime.utcnow().isoformat()  # Добавляем временную метку в формате ISO
+                "color": '#FF5733'
             }
         }
         await send_and_receive(websocket, json.dumps(message), expected_responses_count=0)

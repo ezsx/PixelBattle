@@ -24,7 +24,8 @@ async def init_db(cur: Cursor):
     CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
         nickname VARCHAR(255) UNIQUE NOT NULL,
-        is_banned BOOLEAN DEFAULT FALSE
+        is_banned BOOLEAN DEFAULT FALSE,
+        last_pixel_update TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc')  
     );
     """)
 
@@ -47,7 +48,7 @@ async def init_db(cur: Cursor):
     CREATE TABLE IF NOT EXISTS admins (
         id VARCHAR(36) PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL
+        password_hash VARCHAR(255) NOT NULL,
     );
     """)
 

@@ -1,6 +1,8 @@
 import logging
-from fastapi import FastAPI
+from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+
+from backend.app.api.router import include_api
 from common.app.core.config import config as cfg
 from common.app.db import db_pool, create_db
 from backend.app.api.web_socket import app_ws as websocket_app
@@ -8,10 +10,12 @@ from backend.app.api.web_socket_doc import router as websocket_docs
 
 app = FastAPI()
 
-app.include_router(websocket_docs)
 # Монтирование приложения WebSocket как подприложения
 app.mount("/ws", websocket_app)
 
+api_router = APIRouter()
+include_api(api_router)
+app.include_router(api_router)
 """
 Add CORS middleware support
 The middleware responds to certain types of HTTP requests. It adds appropriate CORS headers to the response

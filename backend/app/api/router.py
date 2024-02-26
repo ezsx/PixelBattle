@@ -1,5 +1,5 @@
-# from fastapi import APIRouter
-#
-# def include_api(router: APIRouter):
-#     from backend.app.api.web_socket import ws as websocket_router
-#     router.include_router(websocket_router)
+from fastapi import APIRouter
+import backend.app.api.admin_login as admin_login
+
+def include_api(router: APIRouter):
+    router.include_router(admin_login.router, prefix="/admin")

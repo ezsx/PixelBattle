@@ -1,32 +1,41 @@
-# from typing import Any
-# from backend.app.schemas import token
-# from backend.app.core.security import create_access_token, create_refresh_token, verify_password
-# from fastapi import APIRouter, Depends, HTTPException
-# from fastapi.security import OAuth2PasswordRequestForm
-# from common.app.db.api_db import get_user_by_email
-#
-# router = APIRouter()
-#
-#
-# @router.post("/login/access-token", response_model=token.Token)
-# async def login_access_token(
-#         # db: Session = Depends(deps.get_db),
-#         form_data: OAuth2PasswordRequestForm = Depends()
-# ) -> Any:
-#     """
-#     OAuth2 compatible token login, get an access token for future requests
-#     """
-#     user = await get_user_by_email(form_data.username)
-#     if user:
-#         if not user.get("is_active"):
-#             raise HTTPException(status_code=400, detail="Inactive user")
-#         if verify_password(plain_password=form_data.password, hashed_password=user.get("hashed_password")):
-#             # print(user)
-#             return {
-#                 "access_token": create_access_token(data={"sub": user.get("user_id")}),
-#                 "refresh_token": create_refresh_token(data={"sub": user.get("user_id")}),
-#                 "token_type": "bearer",
-#             }
-#
-#     raise HTTPException(status_code=400, detail="Incorrect email or password")
-#
+from datetime import datetime, timedelta
+
+from fastapi import APIRouter, HTTPException
+from fastapi import Form
+from jose import jwt
+
+from common.app.core.config import config as cfg
+
+router = APIRouter()
+
+
+def authenticate_admin(username: str, password: str):
+    # Здесь должна быть логика для проверки никнейма и пароля администратора
+    # Например, проверка хэша пароля из базы данных
+    # Пока используем захардкоженные значения для тестирования
+    if username == "admin" and password == "password":
+        return {"username": username}
+    return None
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, cfg.SECRET_KEY, algorithm="HS256")
+    return encoded_jwt
+
+
+@router.post("/login")
+async def login_for_access_token(username: str = Form(...), password: str = Form(...)):
+    user = authenticate_admin(username, password)
+    if not user:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+
+    access_token_expires = timedelta(minutes=cfg.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(data={"sub": user["username"]}, expires_delta=access_token_expires)
+
+    return {"access_token": access_token, "token_type": "bearer"}

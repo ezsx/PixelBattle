@@ -10,7 +10,7 @@ uri = "ws://localhost:8000/ws/"  # адрес WebSocket сервера
 
 
 # run test command, to run inside backend.docker container:
-# python -c "import backend.app.tests.test_websocket"
+# python -c "import backend.app.tests.test_websocket_single_user_actions"
 
 async def send_and_receive(websocket, message, expected_responses_count, timeout=3):
     print(f"Отправлено на сервер: {message}")

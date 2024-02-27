@@ -10,4 +10,5 @@ uvicorn
 pytest
 pytest-asyncio
 pytest-mock
+faker
 itsdangerous

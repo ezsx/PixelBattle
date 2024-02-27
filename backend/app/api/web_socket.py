@@ -2,6 +2,7 @@ import json
 from datetime import datetime, timezone
 from typing import List, Tuple, Optional
 
+import starlette
 from fastapi import WebSocket, FastAPI
 from fastapi.websockets import WebSocketDisconnect
 from jose import jwt, JWTError
@@ -30,8 +31,9 @@ class ConnectionManager:
                     print(f"Message sent to {connection.client}: {message}")  # DEBUG
                 except Exception as e:
                     print(f"Error sending message: {e}")
-                    # Удаляем соединение, если не удалось отправить сообщение
-                    self.active_connections.remove((connection, user_id))
+                    # Проверяем и удаляем соединение, если не удалось отправить сообщение
+                    if (connection, user_id) in self.active_connections:
+                        self.active_connections.remove((connection, user_id))
 
     async def connect(self, websocket: WebSocket, user_id: str):
         self.active_connections.append((websocket, user_id))
@@ -86,7 +88,7 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, str]]:
+async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]], Tuple[int, str]]:
     try:
         # Ожидаем получение сообщения с данными пользователя
         auth_data = await websocket.receive_json()
@@ -94,7 +96,6 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, 
             token = auth_data.get('data')
             admin = await authenticate_admin(token)
             return (admin, (200, "admin")) if admin else (admin, (1008, "Policy Violation"))
-
 
         if auth_data.get('type') != "login":
             return None, (1003, "Unsupported Data")
@@ -124,7 +125,7 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, 
             # Пользователь забанен
             return None, (1002, "Protocol Error")  # Использование кода ошибки протокола для запрещенного доступа
 
-        return user_id, (200, "user")
+        return (nickname, user_id), (200, "user")
 
     except WebSocketDisconnect:
         return None, (1001, "Going Away")
@@ -133,7 +134,7 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, 
 async def authenticate_admin(token: str):
     try:
         payload = jwt.decode(token, cfg.SECRET_KEY, algorithms="HS256")
-        username: str = payload.get("sub")
+        nickname: str = payload.get("sub")
         expiration: int = payload.get("exp")
         # issue_time: int = payload.get("iat")
 
@@ -144,7 +145,7 @@ async def authenticate_admin(token: str):
 
         # Тут можно добавить дополнительные проверки, если нужно
 
-        return await get_admin_by_id(username)
+        return nickname, await get_admin_by_id(nickname)
 
     except JWTError as e:
         print(f"JWTError: {e}")
@@ -155,36 +156,44 @@ async def authenticate_admin(token: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    user_id, response = await authenticate(websocket)
+    user, response = await authenticate(websocket)
 
-    if not (user_id and response[0] == 200):
+    if not (user and response[0] == 200):
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.close(code=response[0], reason=response[1])
         return
 
     admin = True if response[1] == "admin" else False
 
-    # если все ок, подключаем пользователя или админа
-
-    if admin:
-        manager.admin_connections.append(websocket)
-    else:
-        await manager.connect(websocket, user_id)
-
-    await send_field_state(websocket)
-
     try:
+        # если все ок, подключаем пользователя или админа
+        if admin:
+            manager.admin_connections.append(websocket)
+        else:
+            await manager.connect(websocket, user[1])
+
+        await send_field_state(websocket)
         while True:
             message = await websocket.receive_text()
             message_data = json.loads(message)
 
             if message_data['type'] == 'update_pixel':
-                success = await handle_update_pixel(message_data['data'], user_id)
+                x = message_data['data']['x']
+                y = message_data['data']['y']
+                color = message_data['data']['color']
+                success = await handle_update_pixel(x, y, color, user[1])
                 if not success:
                     await websocket.send_text(json.dumps({
                         "type": "error",
                         "message": "You can only color a pixel at a set time."
                     }))
+                else:
+                    message_to_send = json.dumps({
+                        "type": "update_pixel",
+                        "data": {"x": x, "y": y, "color": color, "nickname": user[0]}
+                    })
+                    await manager.broadcast(message_to_send)
+                    await manager.broadcast_to_admins(message_to_send)
 
             elif message_data['type'] == 'get_field_state':
                 await send_field_state(websocket)
@@ -192,9 +201,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # Зона администратора
             if admin:
                 if message_data['type'] == 'update_pixel_admin':
-                    data = message_data['data']
-                    data['color'] = '#FFFFFF' if not data['color'] else data['color'] # цвет или белый цвет для очистки пикселя
-                    await handle_update_pixel(data, user_id)
+                    x = message_data['data']['x']
+                    y = message_data['data']['y']
+                    color = message_data['data']['color']
+                    color = '#FFFFFF' if not color else color  # цвет или белый цвет для очистки пикселя
+                    await handle_update_pixel(x, y, color, user[1])
+                    message_to_send = json.dumps({
+                        "type": "update_pixel",
+                        "data": {"x": x, "y": y, "color": color, "nickname": user[0]}
+                    })
+                    await manager.broadcast(message_to_send)
+                    await manager.broadcast_to_admins(message_to_send)
 
                 elif message_data['type'] == 'pixel_info_admin':
                     x, y = message_data['data']['x'], message_data['data']['y']
@@ -216,24 +233,16 @@ async def websocket_endpoint(websocket: WebSocket):
             elif message_data['type'] == 'disconnect':
                 await manager.disconnect(websocket, code=1000, reason="Normal Closure")
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect or starlette.websockets.WebSocketDisconnect:
         await manager.disconnect(websocket, code=1001, reason="Going Away")
+    except RuntimeError as e:
+        # развернутое описание ошибки
+        print(f"RuntimeError: {e}", flush=True)
+        await manager.disconnect(websocket, code=1006, reason="Abnormal Closure")
 
 
-async def handle_update_pixel(data, user_id):
-    x = data['x']
-    y = data['y']
-    color = data['color']
-
-    # Установка временной метки на сервере
+async def handle_update_pixel(x, y, color, user_id):
     action_time = datetime.utcnow()
-
-    # # Преобразование временной метки из строки в объект datetime
-    # action_time = datetime.fromisoformat(action_time_str) if action_time_str else datetime.utcnow()
-
-    # Предполагается, что user_id уже является объектом UUID, если нет, его нужно преобразовать
-    # user_id = UUID(user_id) if isinstance(user_id, str) else user_id
-
     print(f"Handling update_pixel: x={x}, y={y}, color={color}, user_id={user_id}, action_time={action_time}")
     success = await update_pixel(x=x, y=y, color=color, user_id=user_id, action_time=action_time)
     print(f"Pixel updated: {success}")

@@ -12,7 +12,7 @@ Finally, it commits the changes to the database.
 
 @get_pool_cur
 async def init_db(cur: Cursor):
-    for tbl in ('pixels', 'admins', 'users'):  # Убедитесь, что 'users' удаляется последним
+    for tbl in ('users', 'pixels', 'admins', ):
         await cur.execute(f"""DROP TABLE IF EXISTS public.{tbl} CASCADE;""")
 
     await cur.execute("""
@@ -25,7 +25,7 @@ async def init_db(cur: Cursor):
         id VARCHAR(36) PRIMARY KEY DEFAULT gen_random_uuid(),
         nickname VARCHAR(255) UNIQUE NOT NULL,
         is_banned BOOLEAN DEFAULT FALSE,
-        last_pixel_update TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc')  
+        last_pixel_update TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc' - INTERVAL '100 minutes')  
     );
     """)
 
@@ -36,7 +36,6 @@ async def init_db(cur: Cursor):
         y INT NOT NULL,
         color VARCHAR(7) NOT NULL, -- Цвет в формате HEX, например, #FFFFFF
         user_id VARCHAR(36),
-        last_updated TIMESTAMP WITHOUT TIME ZONE DEFAULT (NOW() AT TIME ZONE 'utc'),
         action_time TIMESTAMP WITHOUT TIME ZONE,
         PRIMARY KEY (x, y),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
@@ -48,7 +47,7 @@ async def init_db(cur: Cursor):
     CREATE TABLE IF NOT EXISTS admins (
         id VARCHAR(36) PRIMARY KEY,
         username VARCHAR(255) UNIQUE NOT NULL,
-        password_hash VARCHAR(255) NOT NULL,
+        password_hash VARCHAR(255) NOT NULL
     );
     """)
 

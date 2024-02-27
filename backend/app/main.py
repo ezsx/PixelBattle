@@ -6,7 +6,6 @@ from backend.app.api.router import include_api
 from common.app.core.config import config as cfg
 from common.app.db import db_pool, create_db
 from backend.app.api.web_socket import app_ws as websocket_app
-from backend.app.api.web_socket_doc import router as websocket_docs
 
 app = FastAPI()
 

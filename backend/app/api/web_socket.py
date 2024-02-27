@@ -7,7 +7,8 @@ from fastapi.websockets import WebSocketDisconnect
 from jose import jwt, JWTError
 from starlette.websockets import WebSocketState
 
-from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname
+from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
+    get_admin_by_id, get_users_info, get_pixel_info, ban_user, clear_db_admin
 from common.app.core.config import config as cfg
 
 app_ws = FastAPI()
@@ -15,14 +16,14 @@ app_ws = FastAPI()
 
 class ConnectionManager:
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: List[Tuple[WebSocket, str]] = []
         self.admin_connections: List[WebSocket] = []
 
     async def broadcast(self, message: str):
         # print("DEBUG broadcast:", len(self.active_connections)) # DEBUG
         # Создаем копию списка активных соединений, чтобы избежать изменения списка во время итерации
         connections = self.active_connections.copy()
-        for connection in connections:
+        for connection, user_id in connections:
             if connection.client_state == WebSocketState.CONNECTED:
                 try:
                     await connection.send_text(message)
@@ -30,25 +31,55 @@ class ConnectionManager:
                 except Exception as e:
                     print(f"Error sending message: {e}")
                     # Удаляем соединение, если не удалось отправить сообщение
-                    self.active_connections.remove(connection)
+                    self.active_connections.remove((connection, user_id))
 
-    async def connect(self, websocket: WebSocket):
-        self.active_connections.append(websocket)
-        print(f"User connected: {websocket.client}")  # DEBUG
+    async def connect(self, websocket: WebSocket, user_id: str):
+        self.active_connections.append((websocket, user_id))
+        print(f"User connected: {websocket.client, user_id}")  # DEBUG
         await self.broadcast_online_count()
+        await self.broadcast_users_info()  # Обновить информацию об активных пользователях
 
     async def disconnect(self, websocket: WebSocket, code=1000, reason="Normal Closure"):
-        if websocket in self.active_connections:
-            print(f"Disconnecting: {websocket.client}, Code: {code}, Reason: {reason}")  # DEBUG
-            self.active_connections.remove(websocket)
-            # print(f"User disconnected: {websocket.client}")  # DEBUG
-            await self.broadcast_online_count()
+        # Найти и удалить кортеж с данным WebSocket из списка активных соединений
+        for connection, user_id in self.active_connections:
+            if connection == websocket:
+                print(f"Disconnecting: {user_id}, Code: {code}, Reason: {reason}")  # Используйте user_id
+                self.active_connections.remove((connection, user_id))
+                break
+        await self.broadcast_online_count()
+        await self.broadcast_users_info()  # Обновить информацию об активных пользователях
 
     async def broadcast_online_count(self):
         online_count = len(self.active_connections)
         await self.broadcast(json.dumps({
             "type": "online_count",
             "data": {"online": online_count}
+        }))
+
+    async def broadcast_to_admins(self, message: str):
+        # Отправка сообщения всем администраторам
+        for admin in self.admin_connections:
+            if admin.client_state == WebSocketState.CONNECTED:
+                try:
+                    await admin.send_text(message)
+                except Exception as e:
+                    print(f"Error sending message to admin: {e}")
+                    self.admin_connections.remove(admin)
+
+    async def broadcast_users_info(self):
+        # Извлечение списка user_id из активных соединений
+        user_ids = [user_id for _, user_id in self.active_connections if user_id]
+
+        if not user_ids:
+            return  # Если нет активных пользователей, выходим из функции
+
+        # Получение информации о пользователях из базы данных
+        users_info = await get_users_info(user_ids)
+
+        # Отправка информации администраторам
+        await self.broadcast_to_admins(json.dumps({
+            "type": "users_online",
+            "data": users_info
         }))
 
 
@@ -59,17 +90,15 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, 
     try:
         # Ожидаем получение сообщения с данными пользователя
         auth_data = await websocket.receive_json()
-        if auth_data.get('type') == "admin":
+        if auth_data.get('type') == "login_admin":
             token = auth_data.get('data')
-            admin = await authenticate_admin_websocket(token)
+            admin = await authenticate_admin(token)
             return (admin, (200, "admin")) if admin else (admin, (1008, "Policy Violation"))
 
-            # Проверяем тип сообщения
+
         if auth_data.get('type') != "login":
             return None, (1003, "Unsupported Data")
-
-        # Извлекаем nickname и user_id из полученного сообщения
-        # TODO исправить на 'type'
+        auth_data = auth_data.get('data')
         nickname = auth_data.get('nickname')
         user_id = auth_data.get('user_id')
 
@@ -101,12 +130,12 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[str], Tuple[int, 
         return None, (1001, "Going Away")
 
 
-async def authenticate_admin_websocket(token: str):
+async def authenticate_admin(token: str):
     try:
         payload = jwt.decode(token, cfg.SECRET_KEY, algorithms="HS256")
         username: str = payload.get("sub")
         expiration: int = payload.get("exp")
-        issue_time: int = payload.get("iat")
+        # issue_time: int = payload.get("iat")
 
         # Проверка срока действия токена
         current_time = datetime.now(timezone.utc).timestamp()
@@ -115,7 +144,7 @@ async def authenticate_admin_websocket(token: str):
 
         # Тут можно добавить дополнительные проверки, если нужно
 
-        return username
+        return await get_admin_by_id(username)
 
     except JWTError as e:
         print(f"JWTError: {e}")
@@ -132,11 +161,15 @@ async def websocket_endpoint(websocket: WebSocket):
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.close(code=response[0], reason=response[1])
         return
-    if response[1]=="admin":
-        pass
-        #TODO подключаем как admin
-    # если все ок, подключаем пользователя
-    await manager.connect(websocket)
+
+    admin = True if response[1] == "admin" else False
+
+    # если все ок, подключаем пользователя или админа
+
+    if admin:
+        manager.admin_connections.append(websocket)
+    else:
+        await manager.connect(websocket, user_id)
 
     await send_field_state(websocket)
 
@@ -144,6 +177,7 @@ async def websocket_endpoint(websocket: WebSocket):
         while True:
             message = await websocket.receive_text()
             message_data = json.loads(message)
+
             if message_data['type'] == 'update_pixel':
                 success = await handle_update_pixel(message_data['data'], user_id)
                 if not success:
@@ -151,8 +185,34 @@ async def websocket_endpoint(websocket: WebSocket):
                         "type": "error",
                         "message": "You can only color a pixel at a set time."
                     }))
+
             elif message_data['type'] == 'get_field_state':
                 await send_field_state(websocket)
+
+            # Зона администратора
+            if admin:
+                if message_data['type'] == 'update_pixel_admin':
+                    data = message_data['data']
+                    data['color'] = '#FFFFFF' if not data['color'] else data['color'] # цвет или белый цвет для очистки пикселя
+                    await handle_update_pixel(data, user_id)
+
+                elif message_data['type'] == 'pixel_info_admin':
+                    x, y = message_data['data']['x'], message_data['data']['y']
+                    pixel_info = await get_pixel_info(x, y)
+                    await websocket.send_text(json.dumps({
+                        "type": "pixel_info",
+                        "data": pixel_info
+                    }))
+
+                elif message_data['type'] == 'ban_user_admin':
+                    user_id = message_data['data']['user_id']
+                    await ban_user(user_id)
+
+                elif message_data['type'] == 'reset_game_admin':
+                    await clear_db_admin()
+
+
+            # обработка добровольного отключения
             elif message_data['type'] == 'disconnect':
                 await manager.disconnect(websocket, code=1000, reason="Normal Closure")
 
@@ -176,7 +236,7 @@ async def handle_update_pixel(data, user_id):
 
     print(f"Handling update_pixel: x={x}, y={y}, color={color}, user_id={user_id}, action_time={action_time}")
     success = await update_pixel(x=x, y=y, color=color, user_id=user_id, action_time=action_time)
-    print("Pixel updated")
+    print(f"Pixel updated: {success}")
     return success
 
 

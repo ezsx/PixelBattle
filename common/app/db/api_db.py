@@ -1,4 +1,6 @@
 from datetime import datetime
+from typing import List
+
 from psycopg import Cursor
 from psycopg.types.uuid import UUID
 from common.app.db.db_pool import get_pool_cur
@@ -54,20 +56,30 @@ async def get_user_by_id(cur: Cursor, user_id: UUID):
 
 
 @get_pool_cur
+async def get_admin_by_id(cur: Cursor, username: str):
+    cur.row_factory = dict_row
+    await cur.execute("""
+        SELECT id FROM admins WHERE username = %s;
+    """, (username,))
+    return await cur.fetchone()
+
+
+@get_pool_cur
 async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, action_time: datetime):
     print("update_pixel_database_func: Updating pixel")
     # Сначала проверяем, когда пользователь последний раз обновлял пиксель
     cur.row_factory = dict_row
-    user = await cur.execute("""
-            SELECT last_pixel_update FROM users WHERE id = %s;
-        """, (user_id,))
+    await cur.execute("""
+        SELECT last_pixel_update FROM users WHERE id = %s;
+    """, (user_id,))
     user = await cur.fetchone()
 
-    if user and (action_time - user['last_pixel_update']).total_seconds() < 300:  # 5 минут = 300 секунд
+    # Проверяем, было ли предыдущее обновление и прошло ли с тех пор 5 минут
+    if user and user['last_pixel_update'] and (action_time - user['last_pixel_update']).total_seconds() < 300:
         print("Too soon to update the pixel again.")
-        return False  # Или другая логика для обработки слишком частых обновлений
+        return False
 
-    # Обновление пикселя и времени последнего обновления пользователя
+    # Если last_pixel_update NULL или прошло более 5 минут, обновляем пиксель
     await cur.execute("""
         INSERT INTO pixels (x, y, color, user_id, action_time) VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (x, y) DO UPDATE
@@ -76,10 +88,10 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
             action_time = CASE WHEN pixels.action_time < EXCLUDED.action_time THEN EXCLUDED.action_time ELSE pixels.action_time END;
     """, (x, y, color, user_id, action_time))
 
-    # Обновляем время
+    # Обновляем время последнего обновления для пользователя
     await cur.execute("""
-               UPDATE users SET last_pixel_update = NOW() AT TIME ZONE 'utc' WHERE id = %s;
-           """, (user_id,))
+        UPDATE users SET last_pixel_update = %s WHERE id = %s;
+    """, (action_time, user_id,))
     print("update_pixel_database_func: pixel updated")
     return True
 
@@ -90,19 +102,21 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
 async def get_pixels(cur: Cursor):
     cur.row_factory = dict_row
     await cur.execute("""
-        SELECT x, y, color, user_id FROM pixels;
+        SELECT p.x, p.y, p.color, p.user_id, u.nickname AS username
+        FROM pixels p
+        JOIN users u ON p.user_id = u.id;
     """)
     return await cur.fetchall()
 
 
-
-
-
 @get_pool_cur
-async def save_admin_token(cur: Cursor, username: str, token: str, expires: datetime):
+async def create_admin(cur: Cursor, username: str, password_hash: str):
+    # создаем админа если его еще нет, а если есть то ничего не делаем
     await cur.execute("""
-        UPDATE admins SET token = %s, token_expires = %s WHERE username = %s;
-    """, (token, expires, username))
+        INSERT INTO admins (username, password_hash) VALUES (%s, %s)
+        ON CONFLICT (username) DO NOTHING;
+    """, (username, password_hash))
+
 
 @get_pool_cur
 async def ban_user(cur: Cursor, user_id: UUID):
@@ -111,3 +125,38 @@ async def ban_user(cur: Cursor, user_id: UUID):
     """, (user_id,))
 
 
+@get_pool_cur
+async def get_users_info(cur: Cursor, user_ids: List[str]) -> List[dict]:
+    cur.row_factory = dict_row
+    await cur.execute("""
+        SELECT id, nickname FROM users WHERE id = ANY(%s);
+    """, (user_ids,))
+    return await cur.fetchall()
+
+
+@get_pool_cur
+async def get_pixel_info(cur: Cursor, x: int, y: int) -> dict:
+    cur.row_factory = dict_row
+    await cur.execute("""
+        SELECT x, y, color, user_id FROM pixels WHERE x = %s AND y = %s;
+    """, (x, y))
+    return await cur.fetchone()
+
+
+@get_pool_cur
+async def get_users_info(cur: Cursor, user_ids: List[str]) -> List[dict]:
+    cur.row_factory = dict_row
+    await cur.execute("""
+        SELECT id, nickname FROM users WHERE id = ANY(%s);
+    """, (user_ids,))
+    return await cur.fetchall()
+
+
+@get_pool_cur
+async def clear_db_admin(cur: Cursor):
+    # Удаление всех записей из таблиц, начиная с таблицы, не имеющей внешних ключей
+    await cur.execute("DELETE FROM pixels;")
+    # await cur.execute("DELETE FROM admins;")
+    await cur.execute("DELETE FROM users;")
+
+    await cur.execute("COMMIT;")

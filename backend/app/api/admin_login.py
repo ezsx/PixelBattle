@@ -3,10 +3,13 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 from fastapi import Form
 from jose import jwt
+from passlib.context import CryptContext
 
 from common.app.core.config import config as cfg
+from common.app.db.api_db import create_admin
 
 router = APIRouter()
+
 
 
 def authenticate_admin(username: str, password: str):
@@ -14,6 +17,8 @@ def authenticate_admin(username: str, password: str):
     # Например, проверка хэша пароля из базы данных
     # Пока используем захардкоженные значения для тестирования
     if username == "admin" and password == "password":
+        password_hash = CryptContext(schemes=["bcrypt"]).hash(password)
+        create_admin(username, password_hash)
         return {"username": username}
     return None
 

@@ -224,6 +224,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 elif message_data['type'] == 'ban_user_admin':
                     user_id = message_data['data']['user_id']
                     await ban_user(user_id)
+                    await websocket.send_text(json.dumps({
+                        "type": "user_banned",
+                        "data": "OK"
+                    }))
 
                 elif message_data['type'] == 'reset_game_admin':
                     await clear_db_admin()

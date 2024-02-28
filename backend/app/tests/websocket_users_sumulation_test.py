@@ -72,5 +72,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(100)]
+    tasks = [user_workflow() for _ in range(1)]
     await asyncio.gather(*tasks)

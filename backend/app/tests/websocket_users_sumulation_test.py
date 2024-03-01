@@ -10,8 +10,10 @@ from common.app.core.config import config as cfg_c
 uri = "ws://localhost:8000/ws/"
 fake = Faker()
 
-# to run this test, run the following command inside the backend.docker container:
-# cd root_app/backend/app/tests
+
+# to run this test, run the following command inside the pixel_battle_backend container:
+# cd /root_app/backend/app/tests
+# pytest websocket_users_sumulation_test.py
 
 
 async def send_and_receive(websocket, message, expected_responses_count=100, timeout=2):
@@ -36,7 +38,8 @@ async def send_and_receive(websocket, message, expected_responses_count=100, tim
 async def create_user_and_login(nickname):
     print(f"Attempting to create and login user with nickname: {nickname}")  # Попытка создания пользователя и входа
     async with client_websockets.connect(uri) as websocket:
-        responses = await send_and_receive(websocket, json.dumps({"type": "login", "data": {"nickname": nickname}}))
+        responses = await send_and_receive(websocket, json.dumps(
+            {"type": "login", "data": {"nickname": nickname}}))
         user_id = responses[0]['data']
         print(f"User created and logged in with user_id: {user_id}")  # Пользователь создан и вошел
         await websocket.close()
@@ -72,5 +75,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(1)]
+    tasks = [user_workflow() for _ in range(10)]
     await asyncio.gather(*tasks)

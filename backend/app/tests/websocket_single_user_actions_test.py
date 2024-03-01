@@ -37,7 +37,7 @@ async def create_user_and_login():
         responses = await send_and_receive(websocket, json.dumps(
             {"type": "login",
              "data":
-                 {"nickname": "NewUser"}
+                 {"nickname": "NewUser"},
              }
         ), expected_responses_count=3)
         user_id = responses[0]['data']  # Получаем user_id из ответа сервера

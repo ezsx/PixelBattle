@@ -8,7 +8,12 @@ from common.app.db.api_db import clear_db
 from common.app.db.db_pool import init_pool
 from common.app.core.config import config as cfg_c
 
+
 # pytest /root_app/backend/app/tests/websocket_login_actions_admin_test.py
+# or
+# cd /root_app/backend/app/tests
+# pytest websocket_login_actions_admin_test.py
+
 async def send_and_receive(websocket, message, expected_responses_count, timeout=3):
     print(f"Отправлено на сервер: {message}")
     await websocket.send(message)
@@ -51,8 +56,9 @@ async def create_user_get_admin_token_and_ban_user():
     # Получение токена администратора
     async with httpx.AsyncClient() as client:
         response = await client.post(f"{fastapi_server_url}/admin/login",
-                                     data={"username": "admin", "password": "password"})
+                                     json={"username": "admin", "password": "password"})
         token_data = response.json()
+
         print(token_data)
         access_token = token_data["access_token"]
         print("Токен администратора получен:", access_token)

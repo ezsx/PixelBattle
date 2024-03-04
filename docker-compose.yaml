@@ -15,19 +15,19 @@ services:
     networks:
       - default
 
-  pgadmin:
-    image: dpage/pgadmin4
-    depends_on:
-      - db
-    env_file:
-      - .env
-    environment:
-      - PGADMIN_DEFAULT_EMAIL=exonys@mail.ru
-      - PGADMIN_DEFAULT_PASSWORD=1
-    ports:
-      - 8080:80
-    networks:
-      - default
+  #  pgadmin:
+  #    image: dpage/pgadmin4
+  #    depends_on:
+  #      - db
+  #    env_file:
+  #      - .env
+  #    environment:
+  #      - PGADMIN_DEFAULT_EMAIL=exonys@mail.ru
+  #      - PGADMIN_DEFAULT_PASSWORD=1
+  #    ports:
+  #      - 9080:90
+  #    networks:
+  #      - default
 
   #  queue:
   #    image: redis
@@ -67,7 +67,56 @@ services:
       args:
         INSTALL_DEV: yes
 
+  prometheus:
+    image: prom/prometheus:v2.26.0 # Используйте актуальную версию
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # Укажите путь к вашему файлу конфигурации
+    ports:
+      - "9090:9090"
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=123 # Задайте пароль для входа в Grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus # Убедитесь, что Grafana запускается после Prometheus
+
+
+  nodeexporter:
+    image: prom/node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+
+  cadvisor:
+    image: gcr.io/google-containers/cadvisor:latest
+    volumes:
+      - /etc/machine-id:/etc/machine-id:ro
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro # Для мониторинга дисков
+    ports:
+      - "8080:8080"
+    privileged: true # Запуск контейнера в привилегированном режиме
+
 
 volumes:
   app-db-data:
+  grafana_data:
+
 

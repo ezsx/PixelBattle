@@ -9,6 +9,7 @@ from jose import jwt, JWTError
 from pydantic import ValidationError
 from starlette.websockets import WebSocketState
 
+from backend.app.prometheus.metrics import active_connections_gauge, ws_messages_sent, ws_messages_received
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
     get_users_info, get_pixel_info, ban_user, clear_db_admin, get_admin_by_username
 from common.app.core.config import config as cfg
@@ -21,6 +22,17 @@ from backend.app.schemas.schemas import (
 )
 
 app_ws = FastAPI()
+
+
+async def send_text_metric(websocket: WebSocket, data: str):
+    ws_messages_sent.inc()  # Инкрементируем счетчик отправленных сообщений
+    await websocket.send_text(data)
+
+
+async def receive_text_metric(websocket: WebSocket) -> str:
+    data = await websocket.receive_text()
+    ws_messages_received.inc()  # Инкрементируем счетчик полученных сообщений
+    return data
 
 
 class ConnectionManager:
@@ -39,7 +51,8 @@ class ConnectionManager:
                                                conn != connection]  # filter out disconnected connections
 
     async def broadcast_to_admins(self, message: str):
-        for admin in self.admin_connections:
+        connections = self.admin_connections.copy()
+        for admin in connections:
             if admin.client_state == WebSocketState.CONNECTED:
                 try:
                     await admin.send_text(message)
@@ -48,11 +61,13 @@ class ConnectionManager:
 
     async def connect(self, websocket: WebSocket, user_id: str):
         self.active_connections.append((websocket, user_id))
+        active_connections_gauge.set(len(self.active_connections))
         await self.broadcast_online_count()
         await self.broadcast_users_info()
 
     async def disconnect(self, websocket: WebSocket, code=1000, reason="Normal Closure"):
         self.active_connections = [(conn, uid) for conn, uid in self.active_connections if conn != websocket]
+        active_connections_gauge.set(len(self.active_connections))
         print(f"Disconnecting: Code: {code}, Reason: {reason}")
         await self.broadcast_online_count()
         await self.broadcast_users_info()
@@ -153,7 +168,7 @@ async def websocket_endpoint(websocket: WebSocket):
             await manager.connect(websocket, user[1])
         await handle_send_field_state(websocket)
         while True:
-            message = await websocket.receive_text()
+            message = await receive_text_metric(websocket)
             await process_message(websocket, message, user, admin)
 
     except WebSocketDisconnect or starlette.websockets.WebSocketDisconnect:
@@ -194,7 +209,7 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
                 request = ResetGameRequest(**message_data)
                 await handle_reset_game(websocket)
     except ValidationError as e:
-        await websocket.send_text(ErrorResponse(message=str(e)).json())
+        await send_text_metric(websocket, ErrorResponse(message=str(e)).json())
 
 
 async def handle_send_field_state(websocket: WebSocket):
@@ -202,7 +217,7 @@ async def handle_send_field_state(websocket: WebSocket):
     print(pixels, flush=True)
     field_state_data = [FieldStateData(**pixel) for pixel in pixels]
     message = FieldStateResponse(type="field_state", data=field_state_data).json()
-    await websocket.send_text(message)
+    await send_text_metric(websocket, message)
 
 
 async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest, user: Tuple[str, str],
@@ -210,8 +225,8 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
     success = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
                                  action_time=datetime.utcnow(), permission=permission)
     if not success:
-        await websocket.send_text(
-            ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
+        await send_text_metric(websocket,
+                               ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
         return False
     else:
         return True
@@ -220,14 +235,14 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
 async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
     data = await get_pixel_info(request.data['x'], request.data['y'])
     message = PixelInfoResponse(type="pixel_info", data=data).json()
-    await websocket.send_text(message)
+    await send_text_metric(websocket, message)
 
 
 async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
     await ban_user(request.data['user_id'])
-    await websocket.send_text(SuccessResponse(data="User banned").json())
+    await send_text_metric(websocket, SuccessResponse(data="User banned").json())
 
 
 async def handle_reset_game(websocket: WebSocket):
     await clear_db_admin()
-    await websocket.send_text(SuccessResponse(data="Game reset").json())
+    await send_text_metric(websocket, SuccessResponse(data="Game reset").json())

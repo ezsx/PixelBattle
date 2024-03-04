@@ -4,7 +4,7 @@ from fastapi import APIRouter
 from fastapi import HTTPException
 
 from backend.app.api.admin_login import create_access_token
-from backend.app.api.web_socket_beta import authenticate_admin
+from backend.app.api.web_socket import authenticate_admin
 from backend.app.schemas.schemas import TokenRefreshRequest
 from common.app.core.config import config as cfg
 

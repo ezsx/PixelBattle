@@ -7,6 +7,8 @@ from common.app.core.config import config as cfg
 from common.app.db import db_pool, create_db
 # from backend.app.api.web_socket import app_ws as websocket_app
 from backend.app.api.web_socket import app_ws as websocket_app
+from prometheus_fastapi_instrumentator import Instrumentator
+
 
 app = FastAPI()
 
@@ -16,6 +18,10 @@ app.mount("/ws", websocket_app)
 api_router = APIRouter()
 include_api(api_router)
 app.include_router(api_router)
+
+Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzip=True)
+
+
 """
 Add CORS middleware support
 The middleware responds to certain types of HTTP requests. It adds appropriate CORS headers to the response

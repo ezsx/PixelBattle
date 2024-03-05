@@ -25,6 +25,14 @@ app_ws = FastAPI()
 
 
 async def send_text_metric(websocket: WebSocket, data: str):
+    """
+    Отправка текстового сообщения через WebSocket и инкремент счетчика отправленных сообщений
+    Тут можно брать метрику по любому событию, которое происходит в WebSocket,
+    сообщения об ошибкие в учет не идут
+    :param websocket:
+    :param data:
+    :return:
+    """
     ws_messages_sent.inc()  # Инкрементируем счетчик отправленных сообщений
     await websocket.send_text(data)
 
@@ -117,6 +125,9 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]],
                     await update_user_nickname(user_id, request.nickname)
             else:
                 user = await create_user(request.nickname)
+                if not user:
+                    await websocket.send_json(ErrorResponse(type="error", message="Nickname already exist").dict())
+                    return None, (1002, "Protocol Error")
                 user_id = user['id']
                 await websocket.send_json(AuthResponse(type="user_id", data=user_id).dict())
 
@@ -156,12 +167,13 @@ async def authenticate_admin(token: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     user, response = await authenticate(websocket)
-    if not (user and response[0] == 200):
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.close(code=response[0], reason=response[1])
-        return
-    admin = True if response[1] == "admin" else False
     try:
+        if not (user and response[0] == 200):
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.close(code=response[0], reason=response[1])
+            return
+        admin = True if response[1] == "admin" else False
+
         if admin:
             manager.admin_connections.append(websocket)
         else:
@@ -225,8 +237,8 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
     success = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
                                  action_time=datetime.utcnow(), permission=permission)
     if not success:
-        await send_text_metric(websocket,
-                               ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
+        await websocket.send_text(
+            ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
         return False
     else:
         return True

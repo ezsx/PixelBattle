@@ -68,9 +68,9 @@ services:
         INSTALL_DEV: yes
 
   prometheus:
-    image: prom/prometheus:v2.26.0 # Используйте актуальную версию
+    image: prom/prometheus:v2.26.0
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml # Укажите путь к вашему файлу конфигурации
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml # путь к вашему файлу конфигурации
     ports:
       - "9090:9090"
     command:
@@ -81,11 +81,11 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=123 # Задайте пароль для входа в Grafana
+      - GF_SECURITY_ADMIN_PASSWORD=123 # пароль для входа в Grafana
     ports:
       - "3000:3000"
     depends_on:
-      - prometheus # Убедитесь, что Grafana запускается после Prometheus
+      - prometheus # Grafana запускается после Prometheus
 
 
   nodeexporter:

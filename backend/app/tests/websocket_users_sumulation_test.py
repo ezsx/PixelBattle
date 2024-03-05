@@ -16,7 +16,7 @@ fake = Faker()
 # pytest websocket_users_sumulation_test.py
 
 
-async def send_and_receive(websocket, message, expected_responses_count=100, timeout=2):
+async def send_and_receive(websocket, message, expected_responses_count=10000, timeout=3):
     print(f"Sending to server: {message}")  # Отправка сообщения серверу
     await websocket.send(message)
 
@@ -75,5 +75,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(10)]
+    tasks = [user_workflow() for _ in range(100)]
     await asyncio.gather(*tasks)

@@ -59,7 +59,7 @@ class FieldStateData(BaseModel):
     x: int
     y: int
     color: str
-    username: str
+    nickname: str
 
 
 

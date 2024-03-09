@@ -75,8 +75,9 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
     user = await cur.fetchone()
 
     # Проверяем, было ли предыдущее обновление и прошло ли с тех пор 5 минут
+    #TODO пока что задержка 0 для дебага
     if not permission:
-        if user and user['last_pixel_update'] and (action_time - user['last_pixel_update']).total_seconds() < 300:
+        if user and user['last_pixel_update'] and (action_time - user['last_pixel_update']).total_seconds() < 0:
             return False
 
     # Если last_pixel_update NULL или прошло более 5 минут, обновляем пиксель
@@ -102,7 +103,7 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
 async def get_pixels(cur: Cursor) -> List[dict]:
     cur.row_factory = dict_row
     await cur.execute("""
-        SELECT p.x, p.y, p.color, u.nickname AS username
+        SELECT p.x, p.y, p.color, u.nickname
         FROM pixels p
         JOIN users u ON p.user_id = u.id;
     """)

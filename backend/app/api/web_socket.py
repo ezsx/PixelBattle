@@ -184,8 +184,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
         if admin:
             manager.admin_connections.append(websocket)
+            await send_text_metric(websocket, SuccessResponse(data="Success login as admin").json())
         else:
             await manager.connect(websocket, user[1])
+            await send_text_metric(websocket, SuccessResponse(data="Success login as user").json())
         await handle_send_field_state(websocket)
         while True:
             message = await receive_text_metric(websocket)

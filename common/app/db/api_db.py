@@ -138,7 +138,10 @@ async def get_users_info(cur: Cursor, user_ids: List[str]) -> List[dict]:
 async def get_pixel_info(cur: Cursor, x: int, y: int) -> dict:
     cur.row_factory = dict_row
     await cur.execute("""
-        SELECT x, y, color, user_id FROM pixels WHERE x = %s AND y = %s;
+        SELECT p.x, p.y, p.color, p.user_id, u.nickname
+        FROM pixels p
+        LEFT JOIN users u ON p.user_id = u.id
+        WHERE p.x = %s AND p.y = %s;
     """, (x, y))
     return await cur.fetchone()
 

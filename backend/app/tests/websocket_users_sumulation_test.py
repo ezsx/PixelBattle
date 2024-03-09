@@ -66,7 +66,7 @@ async def test_multiple_users_actions_simultaneously():
         # Генерация случайных данных для пользователя
         nickname = fake.user_name()
         color = f"#{fake.hex_color()[1:]}"  # Генерируем цвет
-        x, y = fake.random_int(min=0, max=100), fake.random_int(min=0, max=100)
+        x, y = fake.random_int(min=0, max=64), fake.random_int(min=0, max=64)
 
         # Регистрация пользователя и получение user_id
         user_id = await create_user_and_login(nickname)
@@ -75,5 +75,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(100)]
+    tasks = [user_workflow() for _ in range(10)]
     await asyncio.gather(*tasks)

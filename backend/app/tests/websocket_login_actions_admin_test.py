@@ -94,12 +94,13 @@ async def create_user_get_admin_token_and_ban_user():
         # Бан пользователя
         await send_and_receive(websocket, json.dumps({
             "type": "ban_user_admin",
-            "data": {"user_id": "some-user-id"}
+            "data": {"user_id": user_id}
         }), 1)
 
         # Сброс игры
         await send_and_receive(websocket, json.dumps({
-            "type": "reset_game_admin"
+            "type": "reset_game_admin",
+            "data": (64, 64)
         }), 0)
 
         await send_and_receive(websocket, json.dumps({

@@ -28,7 +28,7 @@ async def send_text_metric(websocket: WebSocket, data: str):
     """
     Отправка текстового сообщения через WebSocket и инкремент счетчика отправленных сообщений
     Тут можно брать метрику по любому событию, которое происходит в WebSocket,
-    сообщения об ошибкие в учет не идут
+    сообщения об ошибки в учет не идут
     :param websocket:
     :param data:
     :return:
@@ -95,6 +95,14 @@ class ConnectionManager:
                                           data={"x": x, "y": y, "color": color, "nickname": nickname}).json()
         await self.broadcast(message)
         await self.broadcast_to_admins(message)
+
+    async def disconnect_everyone(self):
+        for connection, _ in self.active_connections:
+            await connection.close(code=1001, reason="Going Away")
+        for admin in self.admin_connections:
+            await admin.close(code=1001, reason="Going Away")
+        self.active_connections = []
+        self.admin_connections = []
 
 
 manager = ConnectionManager()
@@ -219,7 +227,8 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
                 await handle_ban_user(websocket, request)
             elif message_type == 'reset_game_admin':
                 request = ResetGameRequest(**message_data)
-                await handle_reset_game(websocket)
+                await handle_reset_game(websocket, request)
+                await manager.disconnect_everyone()
     except ValidationError as e:
         await send_text_metric(websocket, ErrorResponse(message=str(e)).json())
 
@@ -228,12 +237,15 @@ async def handle_send_field_state(websocket: WebSocket):
     pixels = await get_pixels()
     print(pixels, flush=True)
     field_state_data = [FieldStateData(**pixel) for pixel in pixels]
-    message = FieldStateResponse(type="field_state", data=field_state_data).json()
+    message = FieldStateResponse(type="field_state",size=cfg.FIELD_SIZE, data=field_state_data).json()
     await send_text_metric(websocket, message)
 
 
 async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest, user: Tuple[str, str],
                               permission: bool = False) -> bool:
+    if not (0 <= request.data.x < cfg.FIELD_SIZE[0] and 0 <= request.data.y < cfg.FIELD_SIZE[1]):
+        await websocket.send_text(ErrorResponse(type="error", message="Invalid pixel coordinates").json())
+        return False
     success = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
                                  action_time=datetime.utcnow(), permission=permission)
     if not success:
@@ -255,6 +267,7 @@ async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
     await send_text_metric(websocket, SuccessResponse(data="User banned").json())
 
 
-async def handle_reset_game(websocket: WebSocket):
+async def handle_reset_game(websocket: WebSocket, request: ResetGameRequest):
     await clear_db_admin()
+    cfg.FIELD_SIZE = request.data
     await send_text_metric(websocket, SuccessResponse(data="Game reset").json())

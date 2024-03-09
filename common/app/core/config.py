@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     SECURITY_PASSWORD_SALT: str = "dljkfsaqwueriovbak234"
     EMAIL_CONFIRMATION_TOKEN_EXPIRATION: int = 3600
 
+    FIELD_SIZE: tuple[int, int] = (64, 64)
+
     FRONTEND_URL: str = "http://localhost:8000"
 
     # 60 minutes * 24 hours * 8 days = 8 days

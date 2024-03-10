@@ -205,34 +205,35 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
     message_type = message_data.get('type')
 
     try:
-        if message_type == 'disconnect':
-            await manager.disconnect(websocket, code=1000, reason="Normal Closure")
-        if message_type == 'update_pixel':
-            request = PixelUpdateRequest(**message_data)
-            success = await handle_update_pixel(websocket, request, user)
-            await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color,
-                                          user[0]) if success else None
-
-        elif message_type == 'get_field_state':
-            await handle_send_field_state(websocket)
-        elif admin:
-            if message_type == 'update_pixel_admin':
+        match message_type:
+            case 'disconnect':
+                await manager.disconnect(websocket, code=1000, reason="Normal Closure")
+            case 'update_pixel' | 'update_pixel_admin' if admin:
+                permission = message_type == 'update_pixel_admin'
                 request = PixelUpdateRequest(**message_data)
-                success = await handle_update_pixel(websocket, request, user, permission=True)
-                await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color,
-                                              user[0]) if success else None
-            elif message_type == 'pixel_info_admin':
-                request = PixelInfoRequest(**message_data)
-                await handle_pixel_info(websocket, request)
-            elif message_type == 'ban_user_admin':
-                request = BanUserRequest(**message_data)
-                await handle_ban_user(websocket, request)
-            elif message_type == 'reset_game_admin':
-                request = ResetGameRequest(**message_data)
-                await handle_reset_game(websocket, request)
-                await manager.disconnect_everyone()
+                success = await handle_update_pixel(websocket, request, user, permission=permission)
+                if success:
+                    await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color, user[0])
+            case 'get_field_state':
+                await handle_send_field_state(websocket)
+            case _ if admin:
+                await handle_admin_actions(websocket, message_type, message_data, user)
     except ValidationError as e:
         await send_text_metric(websocket, ErrorResponse(message=str(e)).json())
+
+async def handle_admin_actions(websocket: WebSocket, message_type: str, message_data: dict, user: Tuple[str, str]):
+    match message_type:
+        case 'pixel_info_admin':
+            request = PixelInfoRequest(**message_data)
+            await handle_pixel_info(websocket, request)
+        case 'ban_user_admin':
+            request = BanUserRequest(**message_data)
+            await handle_ban_user(websocket, request)
+        case 'reset_game_admin':
+            request = ResetGameRequest(**message_data)
+            await handle_reset_game(websocket, request)
+            await manager.disconnect_everyone()
+
 
 
 async def handle_send_field_state(websocket: WebSocket):
@@ -260,6 +261,10 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
 
 async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
     data = await get_pixel_info(request.data['x'], request.data['y'])
+    if data is None:
+        await websocket.send_text(
+            ErrorResponse(type="error", message="There is no one who past pixel there").json())
+        return
     message = PixelInfoResponse(type="pixel_info", data=data).json()
     await send_text_metric(websocket, message)
 

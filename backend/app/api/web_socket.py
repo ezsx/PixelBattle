@@ -256,6 +256,7 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
             ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
         return False
     else:
+        await websocket.send_text(SuccessResponse(data="Pixel updated").json())
         return True
 
 

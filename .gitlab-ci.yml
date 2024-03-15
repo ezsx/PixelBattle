@@ -18,7 +18,7 @@ deploy_project:
         git fetch origin master && 
         git reset --hard FETCH_HEAD; 
       else 
-        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend/ .; 
+        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend pixel_battle_backend; 
       fi
     - pwd
     - cd ${PROJECT_DIR}/pixel_battle_backend

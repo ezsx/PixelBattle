@@ -1,9 +1,10 @@
 stages:
   - test
 
-test_job:
+test_docker:
   stage: test
-  image: python:3.11.8
   script:
-    - python --version
-    - pip list
+    - docker info
+    - docker ps
+  only:
+    - branches

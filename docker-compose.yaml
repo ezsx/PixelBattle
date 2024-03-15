@@ -64,8 +64,8 @@ services:
     build:
       context: .
       dockerfile: ./backend/backend.dockerfile
-      args:
-        INSTALL_DEV: yes
+#      args:
+#        INSTALL_DEV: yes
 
   prometheus:
     image: prom/prometheus:v2.26.0

@@ -19,6 +19,8 @@ deploy_project:
   stage: deploy
   script:
     - ssh $SERVER "pwd &&
+      echo ${PROJECT_DIR} &&
+      echo ${CI_JOB_TOKEN} &&
       cd ${PROJECT_DIR} &&
       source run.sh ${CI_JOB_TOKEN} ${PROJECT_DIR}"
   only:

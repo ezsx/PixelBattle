@@ -18,7 +18,9 @@ deploy_project:
   image: docker:latest
   stage: deploy
   script:
-    - ssh $SERVER "pwd"
+    - ssh $SERVER "pwd &&
+      ls -la &&
+      pwd"
 #    - mkdir ${PROJECT_DIR}
 #    - cd ${PROJECT_DIR}
 #    - |

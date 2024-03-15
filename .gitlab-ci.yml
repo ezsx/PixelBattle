@@ -6,25 +6,33 @@ variables:
 
 before_script:
   - 'docker info' # Просто для проверки, что Docker доступен
+  - set -e
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add - > /dev/null
+  - mkdir -p ~/.ssh
+  - touch ~/.ssh/config
+  - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" >> ~/.ssh/config
 
 deploy_project:
   image: docker:latest
   stage: deploy
   script:
-    - mkdir ${PROJECT_DIR}
-    - cd ${PROJECT_DIR}
-    - |
-      if [ -d ".git" ]; then 
-        git fetch origin master && 
-        git reset --hard FETCH_HEAD; 
-      else 
-        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend pixel_battle_backend; 
-      fi
-    - pwd
-    - cd ${PROJECT_DIR}/pixel_battle_backend
-    - docker-compose down
-    - docker-compose pull
-    - docker-compose build
-    - docker-compose up -d
+    - ssh $SERVER "pwd"
+#    - mkdir ${PROJECT_DIR}
+#    - cd ${PROJECT_DIR}
+#    - |
+#      if [ -d ".git" ]; then
+#        git fetch origin master &&
+#        git reset --hard FETCH_HEAD;
+#      else
+#        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend pixel_battle_backend;
+#      fi
+#    - pwd
+#    - cd ${PROJECT_DIR}/pixel_battle_backend
+#    - docker-compose down
+#    - docker-compose pull
+#    - docker-compose build
+#    - docker-compose up -d
   only:
     - master

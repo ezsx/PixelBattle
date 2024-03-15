@@ -20,7 +20,7 @@ deploy_project:
       else 
         git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend/ .; 
       fi
-    - cd pixel_battle_backend
+    - cd ${PROJECT_DIR}/pixel_battle_backend
     - docker-compose down
     - docker-compose pull
     - docker-compose build

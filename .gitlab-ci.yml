@@ -1,10 +1,11 @@
 build_job:
-  image: python:3.9
+  image: python:3.11.8
   script:
-    - echo "Building with Python 3.9"
+    - echo "Building with Python 3.11.8"
 
 test_docker_job:
-  image: docker:19.03.12
+  image: docker:latest
   script:
     - docker version
-    - docker run hello-world
+    - docker ps
+    - docker run python:3.11.8 python

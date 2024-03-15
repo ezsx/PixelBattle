@@ -42,7 +42,7 @@ services:
     command: bash -c "uvicorn backend.app.main:app --host 0.0.0.0 --port ${SERVICE_PORT} --reload"
     #    command:  sh /root_app/backend/entry-point.sh
     #image: conspectus_backend
-#    container_name: pixel_battle_backend
+    #    container_name: pixel_battle_backend
     tty: true
     depends_on:
       - db

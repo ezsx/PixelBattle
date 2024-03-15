@@ -1,10 +1,10 @@
-stages:
-  - test
-
-test_docker:
-  stage: test
+build_job:
+  image: python:3.9
   script:
-    - docker info
-    - docker ps
-  only:
-    - branches
+    - echo "Building with Python 3.9"
+
+test_docker_job:
+  image: docker:19.03.12
+  script:
+    - docker version
+    - docker run hello-world

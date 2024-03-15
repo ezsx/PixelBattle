@@ -19,22 +19,7 @@ deploy_project:
   stage: deploy
   script:
     - ssh $SERVER "pwd &&
-      ls -la &&
-      pwd"
-#    - mkdir ${PROJECT_DIR}
-#    - cd ${PROJECT_DIR}
-#    - |
-#      if [ -d ".git" ]; then
-#        git fetch origin master &&
-#        git reset --hard FETCH_HEAD;
-#      else
-#        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend pixel_battle_backend;
-#      fi
-#    - pwd
-#    - cd ${PROJECT_DIR}/pixel_battle_backend
-#    - docker-compose down
-#    - docker-compose pull
-#    - docker-compose build
-#    - docker-compose up -d
+      cd ${PROJECT_DIR} &&
+      source run.sh ${CI_JOB_TOKEN} ${PROJECT_DIR}"
   only:
     - master

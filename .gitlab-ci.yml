@@ -11,7 +11,7 @@ deploy_project:
   image: docker:latest
   stage: deploy
   script:
-    - mkdir -p ${PROJECT_DIR}
+    - mkdir ${PROJECT_DIR}
     - cd ${PROJECT_DIR}
     - |
       if [ -d ".git" ]; then 
@@ -20,6 +20,7 @@ deploy_project:
       else 
         git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend/ .; 
       fi
+    - cd pixel_battle_backend
     - docker-compose down
     - docker-compose pull
     - docker-compose build

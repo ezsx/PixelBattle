@@ -1,0 +1,28 @@
+stages:
+  - deploy
+
+variables:
+  PROJECT_DIR: '/var/pixel_battle'
+
+before_script:
+  - 'docker info' # Просто для проверки, что Docker доступен
+
+deploy_project:
+  image: docker:latest
+  stage: deploy
+  script:
+    - mkdir -p ${PROJECT_DIR}
+    - cd ${PROJECT_DIR}
+    - |
+      if [ -d ".git" ]; then 
+        git fetch origin master && 
+        git reset --hard FETCH_HEAD; 
+      else 
+        git clone https://oauth2:$CI_JOB_TOKEN@zhuk.k-lab.su/nullexp/pixel_battle_backend/ .; 
+      fi
+    - docker-compose down
+    - docker-compose pull
+    - docker-compose build
+    - docker-compose up -d
+  only:
+    - master

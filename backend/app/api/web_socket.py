@@ -208,8 +208,8 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
         match message_type:
             case 'disconnect':
                 await manager.disconnect(websocket, code=1000, reason="Normal Closure")
-            case 'update_pixel' | 'update_pixel_admin' if admin:
-                permission = message_type == 'update_pixel_admin'
+            case 'update_pixel' | 'update_pixel_admin':
+                permission = message_type == 'update_pixel_admin' and admin
                 request = PixelUpdateRequest(**message_data)
                 success = await handle_update_pixel(websocket, request, user, permission=permission)
                 if success:

@@ -208,10 +208,13 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
         match message_type:
             case 'disconnect':
                 await manager.disconnect(websocket, code=1000, reason="Normal Closure")
-            case 'update_pixel' | 'update_pixel_admin' if admin:
-                permission = message_type == 'update_pixel_admin'
+            case 'update_pixel' | 'update_pixel_admin':
+                permission_required = message_type == 'update_pixel_admin'
+                if permission_required and not admin:
+                    await websocket.send_text("Отказано в доступе")
+                    return
                 request = PixelUpdateRequest(**message_data)
-                success = await handle_update_pixel(websocket, request, user, permission=permission)
+                success = await handle_update_pixel(websocket, request, user, permission=admin)
                 if success:
                     await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color, user[0])
             case 'get_field_state':
@@ -220,6 +223,7 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
                 await handle_admin_actions(websocket, message_type, message_data, user)
     except ValidationError as e:
         await send_text_metric(websocket, ErrorResponse(message=str(e)).json())
+
 
 async def handle_admin_actions(websocket: WebSocket, message_type: str, message_data: dict, user: Tuple[str, str]):
     match message_type:
@@ -256,7 +260,7 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
             ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
         return False
     else:
-        await websocket.send_text(SuccessResponse(data="Pixel updated").json())
+        # await websocket.send_text(SuccessResponse(data="Pixel updated").json())
         return True
 
 

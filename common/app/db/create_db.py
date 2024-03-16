@@ -34,7 +34,7 @@ async def init_db(cur: Cursor):
     CREATE TABLE IF NOT EXISTS pixels (
         x INT NOT NULL,
         y INT NOT NULL,
-            color VARCHAR(7) NOT NULL, -- Цвет в формате HEX, например, #FFFFFF
+        color VARCHAR(7) NOT NULL, -- Цвет в формате HEX, например, #FFFFFF
         user_id VARCHAR(36),
         action_time TIMESTAMP WITHOUT TIME ZONE,
         PRIMARY KEY (x, y),

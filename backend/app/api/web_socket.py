@@ -211,7 +211,8 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
             case 'update_pixel' | 'update_pixel_admin':
                 permission_required = message_type == 'update_pixel_admin'
                 if permission_required and not admin:
-                    await websocket.send_text("Отказано в доступе")
+                    await websocket.send_text(
+                        ErrorResponse(type="error", message="You have not permission").json())
                     return
                 request = PixelUpdateRequest(**message_data)
                 success = await handle_update_pixel(websocket, request, user, permission=admin)
@@ -239,12 +240,11 @@ async def handle_admin_actions(websocket: WebSocket, message_type: str, message_
             await manager.disconnect_everyone()
 
 
-
 async def handle_send_field_state(websocket: WebSocket):
     pixels = await get_pixels()
     print(pixels, flush=True)
     field_state_data = [FieldStateData(**pixel) for pixel in pixels]
-    message = FieldStateResponse(type="field_state",size=cfg.FIELD_SIZE, data=field_state_data).json()
+    message = FieldStateResponse(type="field_state", size=cfg.FIELD_SIZE, data=field_state_data).json()
     await send_text_metric(websocket, message)
 
 

@@ -41,9 +41,19 @@ async def create_user_with_id(cur: Cursor, nickname: str, user_id: UUID):
 
 @get_pool_cur
 async def update_user_nickname(cur: Cursor, user_id: UUID, new_nickname: str):
+    # Проверяем, существует ли уже пользователь с таким никнеймом
+    await cur.execute("""
+        SELECT id FROM users WHERE nickname = %s;
+    """, (new_nickname,))
+    if await cur.fetchone():
+        # Если найден пользователь с таким никнеймом, возвращаем ошибку
+        return False
+
+    # Если никнейм уникален, обновляем его для пользователя
     await cur.execute("""
         UPDATE users SET nickname = %s WHERE id = %s;
     """, (new_nickname, user_id))
+    return True
 
 
 @get_pool_cur

@@ -130,7 +130,10 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]],
                     await websocket.send_json(ErrorResponse(type="error", message="User not found").dict())
                     return None, (1002, "Protocol Error")
                 elif user['nickname'] != request.nickname:
-                    await update_user_nickname(user_id, request.nickname)
+                    success = await update_user_nickname(user_id, request.nickname)
+                    if not success:
+                        await websocket.send_json(ErrorResponse(type="error", message="Nickname already exists").dict())
+                        return None, (1002, "Protocol Error")
             else:
                 user = await create_user(request.nickname)
                 if not user:

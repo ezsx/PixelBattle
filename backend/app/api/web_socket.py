@@ -132,7 +132,7 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]],
                 elif user['nickname'] != request.nickname:
                     success = await update_user_nickname(user_id, request.nickname)
                     if not success:
-                        await websocket.send_json(ErrorResponse(type="error", message="Nickname already exists").dict())
+                        await websocket.send_json(ErrorResponse(type="error", message="Nickname already exist").dict())
                         return None, (1002, "Protocol Error")
             else:
                 user = await create_user(request.nickname)
@@ -158,7 +158,7 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]],
         return None, (1011, "Internal Server Error")
 
 
-async def authenticate_admin(token: str):
+async def authenticate_admin(token: str) -> Optional[Tuple[str, str]]:
     try:
         payload = jwt.decode(token, cfg.SECRET_KEY, algorithms="HS256")
         nickname: str = payload.get("sub")
@@ -178,6 +178,7 @@ async def authenticate_admin(token: str):
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     user, response = await authenticate(websocket)
+    admin = False
     try:
         if not (user and response[0] == 200):
             if websocket.client_state == WebSocketState.CONNECTED:
@@ -197,10 +198,16 @@ async def websocket_endpoint(websocket: WebSocket):
             await process_message(websocket, message, user, admin)
 
     except WebSocketDisconnect or starlette.websockets.WebSocketDisconnect:
-        await manager.disconnect(websocket, code=1001, reason="Going Away")
+        if admin is not False:
+            manager.admin_connections = [adm for adm in manager.admin_connections if adm != websocket]
+        else:
+            await manager.disconnect(websocket, code=1001, reason="Going Away")
     except RuntimeError as e:
         print(f"RuntimeError: {e}", flush=True)
-        await manager.disconnect(websocket, code=1006, reason="Abnormal Closure")
+        if admin is not False:
+            manager.admin_connections = [adm for adm in manager.admin_connections if adm != websocket]
+        else:
+            await manager.disconnect(websocket, code=1006, reason="Abnormal Closure")
 
 
 async def process_message(websocket: WebSocket, message: str, user: Tuple[str, str], admin: bool = False):
@@ -279,6 +286,10 @@ async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
 
 async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
     await ban_user(request.data['user_id'])
+    #disconnect banned user
+    for connection, user_id in manager.active_connections:
+        if user_id == request.data['user_id']:
+            await manager.disconnect(connection)
     await send_text_metric(websocket, SuccessResponse(data="User banned").json())
 
 

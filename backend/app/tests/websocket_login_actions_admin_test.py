@@ -65,14 +65,9 @@ async def create_user_get_admin_token_and_ban_user():
 
     # Подключение к WebSocket как администратор и бан пользователя
     async with websockets.connect(uri) as websocket:
-        response = await send_and_receive(websocket, json.dumps({"type": "login_admin", "data": access_token}), 3)
-        print("Ответы", response)
-        await websocket.send(json.dumps({"type": "admin", "action": "ban_user", "user_id": user_id}))
-        print(f"Пользователь {user_id} забанен")
-
         # Аутентификация с использованием токена
         await send_and_receive(websocket, json.dumps({
-            "type": "admin",
+            "type": "login_admin",
             "data": access_token
         }), 0)
 

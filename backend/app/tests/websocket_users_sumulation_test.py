@@ -29,7 +29,7 @@ async def send_and_receive(websocket, message, expected_responses_count=10000, t
             print(f"Received from server: {response}")  # Получение ответа от сервера
             responses.append(json.loads(response))
         except asyncio.TimeoutError:
-            print("Timeout while waiting for response from server")  # Превышено время ожидания ответа от сервера
+            print("Timeout, total responses received: ", len(responses))  # Превышено время ожидания ответа от сервера
             break
 
     return responses
@@ -75,5 +75,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(1)]
+    tasks = [user_workflow() for _ in range(10)]
     await asyncio.gather(*tasks)

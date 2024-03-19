@@ -76,7 +76,8 @@ class ConnectionManager:
     async def disconnect(self, websocket: WebSocket, code=1000, reason="Normal Closure"):
         self.active_connections = [(conn, uid) for conn, uid in self.active_connections if conn != websocket]
         active_connections_gauge.set(len(self.active_connections))
-        print(f"Disconnecting: Code: {code}, Reason: {reason}")
+        if websocket.client_state == WebSocketState.CONNECTED:
+            await websocket.close(code=code, reason=reason)
         await self.broadcast_online_count()
         await self.broadcast_users_info()
 
@@ -286,10 +287,9 @@ async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
 
 async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
     await ban_user(request.data['user_id'])
-    #disconnect banned user
     for connection, user_id in manager.active_connections:
         if user_id == request.data['user_id']:
-            await manager.disconnect(connection)
+            await manager.disconnect(connection, code=1002, reason="Protocol Error")
     await send_text_metric(websocket, SuccessResponse(data="User banned").json())
 
 

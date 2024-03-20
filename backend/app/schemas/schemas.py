@@ -62,17 +62,51 @@ class PixelInfoData(BaseModel):
     nickname: Optional[str]
 
 
-class FieldStateData(BaseModel):
+class Position(BaseModel):
     x: int
     y: int
+
+
+class Pixel(BaseModel):
+    position: Position
     color: str
     nickname: str
+
+
+class Selection(BaseModel):
+    nickname: str
+    position: Position
+
+
+class FieldStateData(BaseModel):
+    pixels: List[Pixel]
+    selections: List[Selection]
 
 
 class PixelUpdateData(BaseModel):
     x: int
     y: int
     color: str
+
+
+class SelectionUpdateData(BaseModel):
+    position: Optional[Position] = None
+
+
+class SelectionUpdateRequest(BaseModel):
+    type: str = Field(default="selection_update")
+    data: SelectionUpdateData
+
+
+# Модель для броадкаста изменения выделения
+class SelectionUpdateBroadcastData(BaseModel):
+    nickname: str
+    position: Optional[Position] = None  # None, если выделение убрано
+
+
+class SelectionUpdateBroadcast(BaseModel):
+    type: str = Field(default="update_selection")
+    data: SelectionUpdateBroadcastData
 
 
 class PixelUpdateRequest(BaseMessage):
@@ -144,7 +178,6 @@ class OnlineCountResponse(BaseMessage):
                 "type": "online_count",
                 "data": {
                     "users": 10,
-                    "admins": 2
                 }
             }
         }
@@ -169,27 +202,36 @@ class UserInfoResponse(BaseMessage):
 class FieldStateResponse(BaseMessage):
     type: str = Field(default="field_state")
     size: tuple[int, int]
-    data: List[FieldStateData]
+    data: FieldStateData
 
     class Config:
         json_schema_extra = {
             "example": {
                 "type": "field_state",
                 "size": (10, 10),  # Размер поля (x, y)
-                "data": [
-                    {
-                        "x": 10,
-                        "y": 20,
-                        "color": "#FFFFFF",
-                        "nickname": "user123"
-                    },
-                    {
-                        "x": 15,
-                        "y": 25,
-                        "color": "#FF0000",
-                        "nickname": "user124"
-                    }
-                ]
+                "data": {
+                    "pixels": [
+                        {
+                            "position": {
+                                "x": 10,
+                                "y": 20,
+                            },
+                            "color": "<HEX_цвет>",
+                            "nickname": "<псевдоним>"
+                        }
+                        # Другие пиксели
+                    ],
+                    "selections": [
+                        {
+                            "nickname": "<псевдоним>",
+                            "position": {
+                                "x": 10,
+                                "y": 20,
+                            }
+                        },
+                        # Другие выделения
+                    ]
+                }
             }
         }
 

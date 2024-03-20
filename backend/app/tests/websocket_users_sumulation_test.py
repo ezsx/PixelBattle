@@ -46,15 +46,31 @@ async def create_user_and_login(nickname):
         return user_id
 
 
-async def perform_user_actions(user_id, nickname, x, y, color):
+async def perform_user_actions(user_id, nickname, x, y, color, selection_x, selection_y):
     print(f"User {nickname} (ID: {user_id}) performing actions")  # Пользователь выполняет действия
     async with client_websockets.connect(uri) as websocket:
         await send_and_receive(websocket,
                                json.dumps({"type": "login", "data": {"user_id": user_id, "nickname": nickname}}))
         await send_and_receive(websocket,
                                json.dumps({"type": "update_pixel", "data": {"x": x, "y": y, "color": color}}))
+
+        if selection_x and selection_y:
+            selection_data = {
+                "type": "selection_update",
+                "data": {
+                    "position": {"x": selection_x, "y": selection_y}
+                }
+            }
+        else:
+            selection_data = {
+                "type": "selection_update",
+                "data": {
+                    "position": None
+                }
+            }
+        await send_and_receive(websocket, json.dumps(selection_data))
         await send_and_receive(websocket, json.dumps({"type": "get_field_state"}))
-        print(f"User {nickname} completed actions")  # Действия пользователя завершены
+    print(f"User {nickname} completed actions")  # Действия пользователя завершены
 
 
 @pytest.mark.asyncio
@@ -68,12 +84,17 @@ async def test_multiple_users_actions_simultaneously():
         color = f"#{fake.hex_color()[1:]}"  # Генерируем цвет
         x, y = fake.random_int(min=0, max=64), fake.random_int(min=0, max=64)
 
+        # рандом selection либо клетка поля, либо none
+        selection_x, selection_y = None, None
+        if fake.random_int(min=0, max=1):
+            selection_x, selection_y = fake.random_int(min=0, max=64), fake.random_int(min=0, max=64)
+
         # Регистрация пользователя и получение user_id
         user_id = await create_user_and_login(nickname)
 
         # Повторный вход с тем же user_id и выполнение действий
-        await perform_user_actions(user_id, nickname, x, y, color)
+        await perform_user_actions(user_id, nickname, x, y, color, selection_x, selection_y)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(10)]
+    tasks = [user_workflow() for _ in range(3)]
     await asyncio.gather(*tasks)

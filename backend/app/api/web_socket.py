@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 import starlette
 from fastapi import WebSocket, FastAPI
@@ -18,7 +18,8 @@ from backend.app.schemas.schemas import (
     LoginRequest, AdminLoginRequest, ErrorResponse, UserInfoResponse,
     FieldStateResponse, OnlineCountResponse,
     PixelInfoRequest, BanUserRequest, ResetGameRequest, PixelInfoResponse, SuccessResponse,
-    AuthResponse, PixelUpdateRequest, PixelUpdateNotification, FieldStateData
+    AuthResponse, PixelUpdateRequest, PixelUpdateNotification, FieldStateData, SelectionUpdateRequest,
+    SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection
 )
 
 app_ws = FastAPI()
@@ -47,6 +48,8 @@ class ConnectionManager:
     def __init__(self):
         self.active_connections: List[Tuple[WebSocket, str]] = []
         self.admin_connections: List[WebSocket] = []
+        self.nicknames: Dict[WebSocket, str] = {}  # Словарь для хранения никнеймов
+        self.selections: Dict[str, Position] = {}  # Словарь для хранения текущих выделений пользователей
 
     async def broadcast(self, message: str):
         connections = self.active_connections.copy()
@@ -67,15 +70,38 @@ class ConnectionManager:
                 except Exception:
                     self.admin_connections = [adm for adm in self.admin_connections if adm != admin]
 
-    async def connect(self, websocket: WebSocket, user_id: str):
+    async def update_selection(self, nickname: str, position: Optional[Position]):
+        if position:
+            self.selections[nickname] = position
+        else:
+            self.selections.pop(nickname, None)
+        await self.broadcast_selection_update(nickname, position)
+
+    async def broadcast_selection_update(self, nickname: str, position: Optional[Position]):
+        # Формирование и отправка броадкаста с обновлённым состоянием выделения
+        broadcast_message = SelectionUpdateBroadcast(
+            data=SelectionUpdateBroadcastData(
+                nickname=nickname,
+                position=position
+            )
+        )
+        await self.broadcast(broadcast_message.json())
+        await self.broadcast_to_admins(broadcast_message.json())
+
+    async def connect(self, websocket: WebSocket, nickname: str, user_id: str):
         self.active_connections.append((websocket, user_id))
         active_connections_gauge.set(len(self.active_connections))
+        self.nicknames[websocket] = nickname  # Сохраняем никнейм
         await self.broadcast_online_count()
         await self.broadcast_users_info()
 
     async def disconnect(self, websocket: WebSocket, code=1000, reason="Normal Closure"):
+        nickname = self.nicknames.pop(websocket, None)
         self.active_connections = [(conn, uid) for conn, uid in self.active_connections if conn != websocket]
         active_connections_gauge.set(len(self.active_connections))
+        if nickname:  # Если никнейм найден, отправляем сообщение о снятии выделения
+            await self.broadcast_selection_update(nickname, None)
+
         if websocket.client_state == WebSocketState.CONNECTED:
             await websocket.close(code=code, reason=reason)
         await self.broadcast_online_count()
@@ -191,9 +217,8 @@ async def websocket_endpoint(websocket: WebSocket):
             manager.admin_connections.append(websocket)
             await send_text_metric(websocket, SuccessResponse(data="Success login as admin").json())
         else:
-            await manager.connect(websocket, user[1])
+            await manager.connect(websocket, user[0], user[1])
             await send_text_metric(websocket, SuccessResponse(data="Success login as user").json())
-        await handle_send_field_state(websocket)
         while True:
             message = await receive_text_metric(websocket)
             await process_message(websocket, message, user, admin)
@@ -231,6 +256,11 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
                     await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color, user[0])
             case 'get_field_state':
                 await handle_send_field_state(websocket)
+            case 'online_count':
+                await handle_online_count(websocket)
+            case 'selection_update':
+                request = SelectionUpdateRequest(**message_data)
+                await handle_selection_update(websocket, request, user)
             case _ if admin:
                 await handle_admin_actions(websocket, message_type, message_data, user)
     except ValidationError as e:
@@ -251,12 +281,31 @@ async def handle_admin_actions(websocket: WebSocket, message_type: str, message_
             await manager.disconnect_everyone()
 
 
+async def handle_online_count(websocket: WebSocket):
+    online_count = len(manager.active_connections)
+    await send_text_metric(websocket, OnlineCountResponse(type="online_count", data={"online": online_count}).json())
+
+
+async def handle_selection_update(websocket: WebSocket, request: SelectionUpdateRequest, user: Tuple[str, str]):
+    # Обновление информации о выделении в ConnectionManager
+    await manager.update_selection(user[0], request.data.position)
+
+
 async def handle_send_field_state(websocket: WebSocket):
-    pixels = await get_pixels()
-    print(pixels, flush=True)
-    field_state_data = [FieldStateData(**pixel) for pixel in pixels]
-    message = FieldStateResponse(type="field_state", size=cfg.FIELD_SIZE, data=field_state_data).json()
-    await send_text_metric(websocket, message)
+    # Предполагаем, что размер поля хранится в конфигурации приложения
+    field_size = cfg.FIELD_SIZE  # Например, (10, 10)
+
+    raw_pixels = await get_pixels()
+    # Предполагается, что manager.selections возвращает словарь {nickname: Position}
+    raw_selections = manager.selections
+
+    pixels = [Pixel(position=Position(**pixel), color=pixel["color"], nickname=pixel["nickname"]) for pixel in
+              raw_pixels]
+    selections = [Selection(nickname=nickname, position=position) for nickname, position in raw_selections.items()]
+
+    field_state_data = FieldStateData(pixels=pixels, selections=selections)
+    message = FieldStateResponse(size=field_size, data=field_state_data).json()
+    await websocket.send_text(message)
 
 
 async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest, user: Tuple[str, str],

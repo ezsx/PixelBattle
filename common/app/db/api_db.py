@@ -77,7 +77,7 @@ async def get_admin_by_username(cur: Cursor, username: str):
 
 @get_pool_cur
 async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, action_time: datetime,
-                       permission: bool = False):
+                       permission: bool = False) -> str:
     # Сначала проверяем, когда пользователь последний раз обновлял пиксель
     cur.row_factory = dict_row
     await cur.execute("""
@@ -85,12 +85,11 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
     """, (user_id,))
     user = await cur.fetchone()
 
-    # Проверяем, было ли предыдущее обновление и прошло ли с тех пор 5 минут
-    # TODO пока что задержка 0 для дебага
+    # Проверяем, было ли предыдущее обновление и прошло ли с тех пор COOLDOWN
     if not permission:
         if user and user['last_pixel_update'] and (
                 action_time - user['last_pixel_update']).total_seconds() < cfg.COOLDOWN:
-            return False
+            return "cooldown"
 
     # Если last_pixel_update NULL или прошло более 5 минут, обновляем пиксель
     await cur.execute("""
@@ -106,7 +105,7 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
         await cur.execute("""
             UPDATE users SET last_pixel_update = %s WHERE id = %s;
         """, (action_time, user_id,))
-    return True
+    return "ok"
 
 
 # TODO: на данный момент возразаются просто все записи о состоянии поля.

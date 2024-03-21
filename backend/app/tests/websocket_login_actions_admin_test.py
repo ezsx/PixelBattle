@@ -88,7 +88,7 @@ async def create_user_get_admin_token_and_ban_user():
         }), )
 
         await send_and_receive(websocket, json.dumps({
-            "type": "change_cooldown_admin",
+            "type": "update_cooldown_admin",
             "data": 10
         }), )
 

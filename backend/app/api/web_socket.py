@@ -19,8 +19,8 @@ from backend.app.schemas.schemas import (
     FieldStateResponse, OnlineCountResponse,
     PixelInfoRequest, BanUserRequest, ResetGameRequest, PixelInfoResponse, SuccessResponse,
     AuthResponse, PixelUpdateRequest, PixelUpdateNotification, FieldStateData, SelectionUpdateRequest,
-    SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection, ChangeCooldownRequest,
-    ChangeCooldown
+    SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection,
+    ChangeCooldownResponse, ChangeCooldownRequest
 )
 
 app_ws = FastAPI()
@@ -100,9 +100,8 @@ class ConnectionManager:
         nickname = self.nicknames.pop(websocket, None)
         self.active_connections = [(conn, uid) for conn, uid in self.active_connections if conn != websocket]
         active_connections_gauge.set(len(self.active_connections))
-        if nickname:  # Если никнейм найден, отправляем сообщение о снятии выделения
+        if nickname:
             await self.broadcast_selection_update(nickname, None)
-
         # if websocket.client_state == WebSocketState.CONNECTED:
         #     await websocket.close(code=code, reason=reason)
         await self.broadcast_online_count()
@@ -110,17 +109,20 @@ class ConnectionManager:
 
     async def broadcast_online_count(self):
         online_count = len(self.active_connections)
-        await self.broadcast(OnlineCountResponse(type="online_count", data={"online": online_count}).json())
+        await self.broadcast(OnlineCountResponse(data={"online": online_count}).json())
 
     async def broadcast_users_info(self):
         user_ids = [uid for _, uid in self.active_connections]
         if user_ids:
             users_info = await get_users_info(user_ids)
-            await self.broadcast_to_admins(UserInfoResponse(type="users_online", data=users_info).json())
+            await self.broadcast_to_admins(UserInfoResponse(data=users_info).json())
+
+    async def broadcast_change_cooldown(self, data: int):
+        await self.broadcast(ChangeCooldownResponse(data=data).json())
+        await self.broadcast_to_admins(ChangeCooldownResponse(data=data).json())
 
     async def broadcast_pixel(self, x: int, y: int, color: str, nickname: str):
-        message = PixelUpdateNotification(type="pixel_update",
-                                          data={"x": x, "y": y, "color": color, "nickname": nickname}).json()
+        message = PixelUpdateNotification(data={"x": x, "y": y, "color": color, "nickname": nickname}).json()
         await self.broadcast(message)
         await self.broadcast_to_admins(message)
 
@@ -148,41 +150,41 @@ async def authenticate(websocket: WebSocket) -> Tuple[Optional[Tuple[str, str]],
             request = LoginRequest(**auth_data)
             request = request.data
             if not request.nickname:
-                await websocket.send_json(ErrorResponse(type="error", message="Nickname is required").dict())
+                await websocket.send_json(ErrorResponse(message="Nickname is required").dict())
                 return None, (1002, "Protocol Error")
 
             user_id = request.user_id
             if user_id:
                 user = await get_user_by_id(user_id)
                 if not user:
-                    await websocket.send_json(ErrorResponse(type="error", message="User not found").dict())
+                    await websocket.send_json(ErrorResponse(message="User not found").dict())
                     return None, (1002, "Protocol Error")
                 elif user['nickname'] != request.nickname:
                     success = await update_user_nickname(user_id, request.nickname)
                     if not success:
-                        await websocket.send_json(ErrorResponse(type="error", message="Nickname already exist").dict())
+                        await websocket.send_json(ErrorResponse(message="Nickname already exist").dict())
                         return None, (1002, "Protocol Error")
             else:
                 user = await create_user(request.nickname)
                 if not user:
-                    await websocket.send_json(ErrorResponse(type="error", message="Nickname already exist").dict())
+                    await websocket.send_json(ErrorResponse(message="Nickname already exist").dict())
                     return None, (1002, "Protocol Error")
                 user_id = user['id']
-                await websocket.send_json(AuthResponse(type="user_id", data=user_id).dict())
+                await websocket.send_json(AuthResponse(data=user_id).dict())
 
             if user.get('is_banned'):
-                await websocket.send_json(ErrorResponse(type="error", message="User is banned").dict())
+                await websocket.send_json(ErrorResponse(message="User is banned").dict())
                 return None, (1002, "Protocol Error")
 
             return (request.nickname, user_id), (200, "user")
         else:
-            await websocket.send_json(ErrorResponse(type="error", message="Unsupported login type").dict())
+            await websocket.send_json(ErrorResponse(message="Unsupported login type").dict())
             return None, (1003, "Unsupported Data")
 
     except WebSocketDisconnect:
         return None, (1001, "Going Away")
     except ValidationError as e:
-        await websocket.send_json(ErrorResponse(type="error", message=str(e)).dict())
+        await websocket.send_json(ErrorResponse(message=str(e)).dict())
         return None, (1011, "Internal Server Error")
 
 
@@ -245,40 +247,36 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
         match message_type:
             case 'disconnect':
                 await manager.disconnect(websocket, code=1000, reason="Normal Closure")
-            case 'update_pixel' | 'update_pixel_admin':
-                permission_required = message_type == 'update_pixel_admin'
-                if permission_required and not admin:
-                    await websocket.send_text(
-                        ErrorResponse(type="error", message="You have not permission").json())
-                    return
+            case 'update_pixel':
                 request = PixelUpdateRequest(**message_data)
-                success = await handle_update_pixel(websocket, request, user, permission=admin)
-                if success:
-                    await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color, user[0])
-            case 'get_field_state':
-                await handle_send_field_state(websocket)
-            case 'online_count':
-                await handle_online_count(websocket)
+                await handle_update_pixel(websocket, request, user, permission=False)
             case 'update_selection':
                 request = SelectionUpdateRequest(**message_data)
-                await handle_selection_update(websocket, request, user)
-            case 'cooldown':
-                await send_text_metric(websocket, ChangeCooldown(data=cfg.COOLDOWN).json())
+                await handle_selection_update(request, user)
+            case 'get_field_state':
+                await handle_send_field_state(websocket)
+            case 'get_online_count':
+                await handle_online_count(websocket)
+            case 'get_cooldown':
+                await send_text_metric(websocket, ChangeCooldownResponse(data=cfg.COOLDOWN).json())
             case _ if admin:
-                await handle_admin_actions(websocket, message_type, message_data, user)
+                await process_admin_message(websocket, message_type, message_data, user)
     except ValidationError as e:
         await send_text_metric(websocket, ErrorResponse(message=str(e)).json())
 
 
-async def handle_admin_actions(websocket: WebSocket, message_type: str, message_data: dict, user: Tuple[str, str]):
+async def process_admin_message(websocket: WebSocket, message_type: str, message_data: dict, user: Tuple[str, str]):
     match message_type:
+        case 'update_pixel_admin':
+            request = PixelUpdateRequest(**message_data)
+            await handle_update_pixel(websocket, request, user, permission=True)
         case 'pixel_info_admin':
             request = PixelInfoRequest(**message_data)
             await handle_pixel_info(websocket, request)
         case 'toggle_ban_user_admin':
             request = BanUserRequest(**message_data)
             await handle_ban_user(websocket, request)
-        case 'change_cooldown_admin':
+        case 'update_cooldown_admin':
             request = ChangeCooldownRequest(**message_data)
             await handle_change_cooldown(request.data)
             await send_text_metric(websocket, SuccessResponse(data="Cooldown changed").json())
@@ -290,27 +288,23 @@ async def handle_admin_actions(websocket: WebSocket, message_type: str, message_
 
 async def handle_online_count(websocket: WebSocket):
     online_count = len(manager.active_connections)
-    await send_text_metric(websocket, OnlineCountResponse(type="online_count", data={"online": online_count}).json())
+    await send_text_metric(websocket, OnlineCountResponse(data={"online": online_count}).json())
 
 
 async def handle_change_cooldown(data: int):
     cfg.COOLDOWN = data
-    await manager.broadcast(ChangeCooldown(data=data).json())
-    await manager.broadcast_to_admins(ChangeCooldown(data=data).json())
+    await manager.broadcast_change_cooldown(data)
 
 
-async def handle_selection_update(websocket: WebSocket, request: SelectionUpdateRequest, user: Tuple[str, str]):
-    # Обновление информации о выделении в ConnectionManager
+async def handle_selection_update(request: SelectionUpdateRequest, user: Tuple[str, str]):
     await manager.update_selection(user[0], request.data.position)
 
 
 async def handle_send_field_state(websocket: WebSocket):
-    # Предполагаем, что размер поля хранится в конфигурации приложения
-    field_size = cfg.FIELD_SIZE  # Например, (10, 10)
+    field_size = cfg.FIELD_SIZE
     cooldown = cfg.COOLDOWN
 
     raw_pixels = await get_pixels()
-    # Предполагается, что manager.selections возвращает словарь {nickname: Position}
     raw_selections = manager.selections
 
     pixels = [Pixel(position=Position(**pixel), color=pixel["color"], nickname=pixel["nickname"]) for pixel in
@@ -323,28 +317,25 @@ async def handle_send_field_state(websocket: WebSocket):
 
 
 async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest, user: Tuple[str, str],
-                              permission: bool = False) -> bool:
+                              permission: bool = False):
     if not (0 <= request.data.x < cfg.FIELD_SIZE[0] and 0 <= request.data.y < cfg.FIELD_SIZE[1]):
-        await websocket.send_text(ErrorResponse(type="error", message="Invalid pixel coordinates").json())
-        return False
-    success = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
+        await websocket.send_text(ErrorResponse(message="Invalid pixel coordinates").json())
+    message = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
                                  action_time=datetime.utcnow(), permission=permission)
-    if not success:
+    if message == "cooldown":
         await websocket.send_text(
-            ErrorResponse(type="error", message="You can only color a pixel at a set time.").json())
-        return False
+            ErrorResponse(message="You can only color a pixel at a set time.").json())
     else:
-        # await websocket.send_text(SuccessResponse(data="Pixel updated").json())
-        return True
+        await manager.broadcast_pixel(request.data.x, request.data.y, request.data.color, user[0])
 
 
 async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
     data = await get_pixel_info(request.data['x'], request.data['y'])
     if data is None:
         await websocket.send_text(
-            ErrorResponse(type="error", message="There is no one who past pixel there").json())
+            ErrorResponse(message="There is no one who past pixel there").json())
         return
-    message = PixelInfoResponse(type="pixel_info", data=data).json()
+    message = PixelInfoResponse(data=data).json()
     await send_text_metric(websocket, message)
 
 
@@ -353,7 +344,7 @@ async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
     for connection, user_id in manager.active_connections:
         if user_id == request.data['user_id']:
             await manager.disconnect(connection, code=1002, reason="Protocol Error")
-    await send_text_metric(websocket, SuccessResponse(data="User banned").json())
+    await send_text_metric(websocket, SuccessResponse(data="User ban toggled").json())
 
 
 async def handle_reset_game(websocket: WebSocket, request: ResetGameRequest):

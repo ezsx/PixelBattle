@@ -3,22 +3,6 @@ from typing import Optional, Dict, List
 from pydantic import BaseModel, Field
 
 
-class PixelUpdateNotification(BaseModel):
-    type: str = Field(default="pixel_update")
-    data: dict
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "type": "pixel_update",
-                "data": {
-                    "x": 1,
-                    "y": 2,
-                    "color": "#FFFFFF",
-                    "nickname": "user123"
-                }
-            }
-        }
 
 
 class BaseMessage(BaseModel):
@@ -77,8 +61,10 @@ class Selection(BaseModel):
     nickname: str
     position: Position
 
+
 class CoolDownData(BaseModel):
     cooldown: int
+
 
 class FieldStateData(BaseModel):
     pixels: List[Pixel]
@@ -100,10 +86,9 @@ class SelectionUpdateRequest(BaseModel):
     data: SelectionUpdateData
 
 
-# Модель для броадкаста изменения выделения
 class SelectionUpdateBroadcastData(BaseModel):
     nickname: str
-    position: Optional[Position] = None  # None, если выделение убрано
+    position: Optional[Position] = None
 
 
 class SelectionUpdateBroadcast(BaseModel):
@@ -111,27 +96,46 @@ class SelectionUpdateBroadcast(BaseModel):
     data: SelectionUpdateBroadcastData
 
 
-class ChangeCooldownRequest(BaseMessage):
-    type: str = Field(default="cooldown")
+class ChangeCooldownResponse(BaseModel):
+    type: str = Field(default="cooldown_update")
     data: int
 
     class Config:
         json_schema_extra = {
             "example": {
-                "type": "cooldown",
+                "type": "cooldown_update",
                 "data": 10
             }
         }
 
-class ChangeCooldown(BaseModel):
-    type: str = Field(default="cooldown")
+
+class ChangeCooldownRequest(BaseModel):
+    type: str = Field(default="update_cooldown")
     data: int
 
     class Config:
         json_schema_extra = {
             "example": {
-                "type": "cooldown",
+                "type": "update_cooldown",
                 "data": 10
+            }
+        }
+
+
+class PixelUpdateNotification(BaseModel):
+    type: str = Field(default="pixel_update")
+    data: dict
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "type": "pixel_update",
+                "data": {
+                    "x": 1,
+                    "y": 2,
+                    "color": "#FFFFFF",
+                    "nickname": "user123"
+                }
             }
         }
 
@@ -195,28 +199,28 @@ class AdminLoginRequest(BaseMessage):
 
 
 class OnlineCountResponse(BaseMessage):
-    type: str = Field(default="online_count")
+    type: str = Field(default="online_count_update")
     data: Dict[str, int]
 
     class Config:
         json_schema_extra = {
             "example": {
-                "type": "online_count",
+                "type": "online_count_update",
                 "data": {
-                    "users": 10,
+                    "online": 10,
                 }
             }
         }
 
 
 class UserInfoResponse(BaseMessage):
-    type: str = Field(default="user_info")
+    type: str = Field(default="users_info_update")
     data: List[UserInfo]
 
     class Config:
         json_schema_extra = {
             "example": {
-                "type": "user_info",
+                "type": "users_info_update",
                 "data": [
                     {"nickname": "user123", "id": "123"},
                     {"nickname": "user124", "id": "124"}
@@ -277,13 +281,13 @@ class PixelInfoRequest(BaseMessage):
 
 
 class PixelInfoResponse(BaseMessage):
-    type: str = Field(default="pixel_info")
+    type: str = Field(default="pixel_info_update")
     data: PixelInfoData
 
     class Config:
         json_schema_extra = {
             "example": {
-                "type": "pixel_info",
+                "type": "pixel_info_update",
                 "data": {
                     "x": 10,
                     "y": 20,

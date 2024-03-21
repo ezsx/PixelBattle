@@ -59,20 +59,21 @@ async def perform_user_actions(user_id, nickname, x, y, color, selection_x, sele
 
         if selection_x and selection_y:
             selection_data = {
-                "type": "selection_update",
+                "type": "update_selection",
                 "data": {
                     "position": {"x": selection_x, "y": selection_y}
                 }
             }
         else:
             selection_data = {
-                "type": "selection_update",
+                "type": "update_selection",
                 "data": {
                     "position": None
                 }
             }
         await send_and_receive(websocket, json.dumps(selection_data))
-        await send_and_receive(websocket, json.dumps({"type": "cool_down"}))
+        await send_and_receive(websocket, json.dumps({"type": "get_online_count"}))
+        await send_and_receive(websocket, json.dumps({"type": "get_cooldown"}))
         await send_and_receive(websocket, json.dumps({"type": "get_field_state"}))
     print(f"User {nickname} completed actions")  # Действия пользователя завершены
 

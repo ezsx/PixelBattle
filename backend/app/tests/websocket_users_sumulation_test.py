@@ -31,6 +31,9 @@ async def send_and_receive(websocket, message, expected_responses_count=10000, t
         except asyncio.TimeoutError:
             print("Timeout, total responses received: ", len(responses))  # Превышено время ожидания ответа от сервера
             break
+        except client_websockets.exceptions.ConnectionClosed:
+            print("Соединение было принудительно закрыто сервером")
+            break
 
     return responses
 
@@ -69,6 +72,7 @@ async def perform_user_actions(user_id, nickname, x, y, color, selection_x, sele
                 }
             }
         await send_and_receive(websocket, json.dumps(selection_data))
+        await send_and_receive(websocket, json.dumps({"type": "cool_down"}))
         await send_and_receive(websocket, json.dumps({"type": "get_field_state"}))
     print(f"User {nickname} completed actions")  # Действия пользователя завершены
 

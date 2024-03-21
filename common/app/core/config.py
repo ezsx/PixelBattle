@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     EMAIL_CONFIRMATION_TOKEN_EXPIRATION: int = 3600
 
     FIELD_SIZE: tuple[int, int] = (64, 64)
+    COOLDOWN: int = 0
 
     FRONTEND_URL: str = "http://localhost:8000"
 

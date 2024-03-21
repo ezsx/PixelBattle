@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketState
 
 from backend.app.prometheus.metrics import active_connections_gauge, ws_messages_sent, ws_messages_received
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
-    get_users_info, get_pixel_info, ban_user, clear_db_admin, get_admin_by_username
+    get_users_info, get_pixel_info, clear_db_admin, get_admin_by_username, toggle_ban_user
 from common.app.core.config import config as cfg
 
 from backend.app.schemas.schemas import (
@@ -19,7 +19,8 @@ from backend.app.schemas.schemas import (
     FieldStateResponse, OnlineCountResponse,
     PixelInfoRequest, BanUserRequest, ResetGameRequest, PixelInfoResponse, SuccessResponse,
     AuthResponse, PixelUpdateRequest, PixelUpdateNotification, FieldStateData, SelectionUpdateRequest,
-    SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection
+    SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection, ChangeCooldownRequest,
+    ChangeCooldown
 )
 
 app_ws = FastAPI()
@@ -102,8 +103,8 @@ class ConnectionManager:
         if nickname:  # Если никнейм найден, отправляем сообщение о снятии выделения
             await self.broadcast_selection_update(nickname, None)
 
-        if websocket.client_state == WebSocketState.CONNECTED:
-            await websocket.close(code=code, reason=reason)
+        # if websocket.client_state == WebSocketState.CONNECTED:
+        #     await websocket.close(code=code, reason=reason)
         await self.broadcast_online_count()
         await self.broadcast_users_info()
 
@@ -261,6 +262,8 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
             case 'selection_update':
                 request = SelectionUpdateRequest(**message_data)
                 await handle_selection_update(websocket, request, user)
+            case 'cool_down':
+                await send_text_metric(websocket, ChangeCooldown(data=cfg.COOLDOWN).json())
             case _ if admin:
                 await handle_admin_actions(websocket, message_type, message_data, user)
     except ValidationError as e:
@@ -272,9 +275,13 @@ async def handle_admin_actions(websocket: WebSocket, message_type: str, message_
         case 'pixel_info_admin':
             request = PixelInfoRequest(**message_data)
             await handle_pixel_info(websocket, request)
-        case 'ban_user_admin':
+        case 'toggle_ban_user_admin':
             request = BanUserRequest(**message_data)
             await handle_ban_user(websocket, request)
+        case 'change_cooldown_admin':
+            request = ChangeCooldownRequest(**message_data)
+            await handle_change_cooldown(request.data)
+            await send_text_metric(websocket, SuccessResponse(data="Cooldown changed").json())
         case 'reset_game_admin':
             request = ResetGameRequest(**message_data)
             await handle_reset_game(websocket, request)
@@ -286,6 +293,12 @@ async def handle_online_count(websocket: WebSocket):
     await send_text_metric(websocket, OnlineCountResponse(type="online_count", data={"online": online_count}).json())
 
 
+async def handle_change_cooldown(data: int):
+    cfg.COOLDOWN = data
+    await manager.broadcast(ChangeCooldown(data=data).json())
+    await manager.broadcast_to_admins(ChangeCooldown(data=data).json())
+
+
 async def handle_selection_update(websocket: WebSocket, request: SelectionUpdateRequest, user: Tuple[str, str]):
     # Обновление информации о выделении в ConnectionManager
     await manager.update_selection(user[0], request.data.position)
@@ -294,6 +307,7 @@ async def handle_selection_update(websocket: WebSocket, request: SelectionUpdate
 async def handle_send_field_state(websocket: WebSocket):
     # Предполагаем, что размер поля хранится в конфигурации приложения
     field_size = cfg.FIELD_SIZE  # Например, (10, 10)
+    cooldown = cfg.COOLDOWN
 
     raw_pixels = await get_pixels()
     # Предполагается, что manager.selections возвращает словарь {nickname: Position}
@@ -304,7 +318,7 @@ async def handle_send_field_state(websocket: WebSocket):
     selections = [Selection(nickname=nickname, position=position) for nickname, position in raw_selections.items()]
 
     field_state_data = FieldStateData(pixels=pixels, selections=selections)
-    message = FieldStateResponse(size=field_size, data=field_state_data).json()
+    message = FieldStateResponse(size=field_size, cooldown=cooldown, data=field_state_data).json()
     await websocket.send_text(message)
 
 
@@ -335,7 +349,7 @@ async def handle_pixel_info(websocket: WebSocket, request: PixelInfoRequest):
 
 
 async def handle_ban_user(websocket: WebSocket, request: BanUserRequest):
-    await ban_user(request.data['user_id'])
+    await toggle_ban_user(request.data['user_id'])
     for connection, user_id in manager.active_connections:
         if user_id == request.data['user_id']:
             await manager.disconnect(connection, code=1002, reason="Protocol Error")

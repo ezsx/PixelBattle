@@ -77,6 +77,8 @@ class Selection(BaseModel):
     nickname: str
     position: Position
 
+class CoolDownData(BaseModel):
+    cooldown: int
 
 class FieldStateData(BaseModel):
     pixels: List[Pixel]
@@ -108,6 +110,30 @@ class SelectionUpdateBroadcast(BaseModel):
     type: str = Field(default="update_selection")
     data: SelectionUpdateBroadcastData
 
+
+class ChangeCooldownRequest(BaseMessage):
+    type: str = Field(default="cooldown")
+    data: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "type": "cooldown",
+                "data": 10
+            }
+        }
+
+class ChangeCooldown(BaseModel):
+    type: str = Field(default="cooldown")
+    data: int
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "type": "cooldown",
+                "data": 10
+            }
+        }
 
 class PixelUpdateRequest(BaseMessage):
     type: str = Field(default="update_pixel")
@@ -201,6 +227,7 @@ class UserInfoResponse(BaseMessage):
 
 class FieldStateResponse(BaseMessage):
     type: str = Field(default="field_state")
+    cooldown: int
     size: tuple[int, int]
     data: FieldStateData
 

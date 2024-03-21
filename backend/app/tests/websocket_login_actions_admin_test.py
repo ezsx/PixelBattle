@@ -14,7 +14,7 @@ from common.app.core.config import config as cfg_c
 # cd /root_app/backend/app/tests
 # pytest websocket_login_actions_admin_test.py
 
-async def send_and_receive(websocket, message, expected_responses_count, timeout=3):
+async def send_and_receive(websocket, message, expected_responses_count=10, timeout=1):
     print(f"Отправлено на сервер: {message}")
     await websocket.send(message)
 
@@ -28,6 +28,9 @@ async def send_and_receive(websocket, message, expected_responses_count, timeout
             print(f"Received from server: {response}")
         except asyncio.TimeoutError:
             print("Превышено время ожидания ответа от сервера")
+            break
+        except websockets.exceptions.ConnectionClosed:
+            print("Соединение было принудительно закрыто сервером")
             break
 
     return responses
@@ -69,7 +72,11 @@ async def create_user_get_admin_token_and_ban_user():
         await send_and_receive(websocket, json.dumps({
             "type": "login_admin",
             "data": access_token
-        }), 0)
+        }), )
+
+        await send_and_receive(websocket, json.dumps({
+            "type": "get_field_state"
+        }), )
 
         # Пример выполнения действий от имени администратора
         # Например, отправка сообщения об очистке пикселя
@@ -78,29 +85,42 @@ async def create_user_get_admin_token_and_ban_user():
         await send_and_receive(websocket, json.dumps({
             "type": "pixel_info_admin",
             "data": {"x": 10, "y": 20}
-        }), 1)
+        }), )
+
+        await send_and_receive(websocket, json.dumps({
+            "type": "change_cooldown_admin",
+            "data": 10
+        }), )
 
         # отправка сообщения об очистке пикселя
         await send_and_receive(websocket, json.dumps({
             "type": "update_pixel_admin",
             "data": {"x": 10, "y": 20, "color": "#FFFFFF"}
-        }), 0)
+        }), )
 
         # Бан пользователя
         await send_and_receive(websocket, json.dumps({
-            "type": "ban_user_admin",
+            "type": "toggle_ban_user_admin",
             "data": {"user_id": user_id}
-        }), 1)
+        }), )
+
+        # разбан пользователя
+        await send_and_receive(websocket, json.dumps({
+            "type": "toggle_ban_user_admin",
+            "data": {"user_id": user_id}
+        }), )
+
+        await send_and_receive(websocket, json.dumps({
+            "type": "get_field_state"
+        }), )
 
         # Сброс игры
         await send_and_receive(websocket, json.dumps({
             "type": "reset_game_admin",
             "data": (64, 64)
-        }), 0)
-
-        await send_and_receive(websocket, json.dumps({
-            "type": "disconnect"
-        }), 0)
+        }), )
+        # обрабатываем отключение админа
+        await websocket.close()
 
 
 @pytest.mark.asyncio

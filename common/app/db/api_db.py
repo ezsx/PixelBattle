@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import List
+from common.app.core.config import config as cfg
 
 from psycopg import Cursor
 from psycopg.types.uuid import UUID
@@ -85,9 +86,10 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
     user = await cur.fetchone()
 
     # Проверяем, было ли предыдущее обновление и прошло ли с тех пор 5 минут
-    #TODO пока что задержка 0 для дебага
+    # TODO пока что задержка 0 для дебага
     if not permission:
-        if user and user['last_pixel_update'] and (action_time - user['last_pixel_update']).total_seconds() < 0:
+        if user and user['last_pixel_update'] and (
+                action_time - user['last_pixel_update']).total_seconds() < cfg.COOLDOWN:
             return False
 
     # Если last_pixel_update NULL или прошло более 5 минут, обновляем пиксель
@@ -130,10 +132,11 @@ async def create_admin(cur: Cursor, username: str, password_hash: str):
 
 
 @get_pool_cur
-async def ban_user(cur: Cursor, user_id: UUID):
+async def toggle_ban_user(cur: Cursor, user_id: UUID):
     await cur.execute("""
-        UPDATE users SET is_banned = TRUE WHERE id = %s;
+        UPDATE users SET is_banned = NOT is_banned WHERE id = %s;
     """, (user_id,))
+
 
 
 @get_pool_cur

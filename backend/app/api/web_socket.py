@@ -259,10 +259,10 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
                 await handle_send_field_state(websocket)
             case 'online_count':
                 await handle_online_count(websocket)
-            case 'selection_update':
+            case 'update_selection':
                 request = SelectionUpdateRequest(**message_data)
                 await handle_selection_update(websocket, request, user)
-            case 'cool_down':
+            case 'cooldown':
                 await send_text_metric(websocket, ChangeCooldown(data=cfg.COOLDOWN).json())
             case _ if admin:
                 await handle_admin_actions(websocket, message_type, message_data, user)

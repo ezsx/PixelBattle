@@ -96,7 +96,7 @@ class SelectionUpdateData(BaseModel):
 
 
 class SelectionUpdateRequest(BaseModel):
-    type: str = Field(default="selection_update")
+    type: str = Field(default="update_selection")
     data: SelectionUpdateData
 
 
@@ -107,7 +107,7 @@ class SelectionUpdateBroadcastData(BaseModel):
 
 
 class SelectionUpdateBroadcast(BaseModel):
-    type: str = Field(default="update_selection")
+    type: str = Field(default="selection_update")
     data: SelectionUpdateBroadcastData
 
 

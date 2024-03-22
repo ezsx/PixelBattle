@@ -11,7 +11,7 @@ from starlette.websockets import WebSocketState
 
 from backend.app.prometheus.metrics import active_connections_gauge, ws_messages_sent, ws_messages_received
 from common.app.db.api_db import get_pixels, update_pixel, get_user_by_id, create_user, update_user_nickname, \
-    get_users_info, get_pixel_info, clear_db_admin, get_admin_by_username, toggle_ban_user
+    get_pixel_info, clear_db_admin, get_admin_by_username, toggle_ban_user
 from common.app.core.config import config as cfg
 
 from backend.app.schemas.schemas import (
@@ -20,7 +20,7 @@ from backend.app.schemas.schemas import (
     PixelInfoRequest, BanUserRequest, ResetGameRequest, PixelInfoResponse, SuccessResponse,
     AuthResponse, PixelUpdateRequest, PixelUpdateNotification, FieldStateData, SelectionUpdateRequest,
     SelectionUpdateBroadcast, SelectionUpdateBroadcastData, Position, Pixel, Selection,
-    ChangeCooldownResponse, ChangeCooldownRequest
+    ChangeCooldownResponse, ChangeCooldownRequest, UserInfo
 )
 
 app_ws = FastAPI()
@@ -117,10 +117,18 @@ class ConnectionManager:
         await self.broadcast(OnlineCountResponse(data={"online": online_count}).json())
 
     async def broadcast_users_info(self):
-        user_ids = [uid for _, uid in self.active_connections]
-        if user_ids:
-            users_info = await get_users_info(user_ids)
+        # Подготовка списка информации о пользователях
+        users_info = [
+            UserInfo(nickname=self.nicknames[websocket], id=user_id)
+            for websocket, user_id in self.active_connections
+            if websocket in self.nicknames
+        ]
+        # Формирование и отправка сообщения админам
+        if users_info:
             await self.broadcast_to_admins(UserInfoResponse(data=users_info).json())
+        else:
+            # Если нет активных пользователей, отправляем пустой список
+            await self.broadcast_to_admins(UserInfoResponse(data=[]).json())
 
     async def broadcast_change_cooldown(self, data: int):
         await self.broadcast(ChangeCooldownResponse(data=data).json())

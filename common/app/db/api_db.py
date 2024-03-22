@@ -91,6 +91,7 @@ async def update_pixel(cur: Cursor, x: int, y: int, color: str, user_id: str, ac
                 action_time - user['last_pixel_update']).total_seconds() < cfg.COOLDOWN:
             return "cooldown"
 
+
     # Если last_pixel_update NULL или прошло более 5 минут, обновляем пиксель
     await cur.execute("""
         INSERT INTO pixels (x, y, color, user_id, action_time) VALUES (%s, %s, %s, %s, %s)

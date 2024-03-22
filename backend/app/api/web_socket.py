@@ -333,6 +333,7 @@ async def handle_update_pixel(websocket: WebSocket, request: PixelUpdateRequest,
                               permission: bool = False):
     if not (0 <= request.data.x < cfg.FIELD_SIZE[0] and 0 <= request.data.y < cfg.FIELD_SIZE[1]):
         await websocket.send_text(ErrorResponse(message="Invalid pixel coordinates").json())
+        return
     message = await update_pixel(x=request.data.x, y=request.data.y, color=request.data.color, user_id=user[1],
                                  action_time=datetime.utcnow(), permission=permission)
     if message == "cooldown":

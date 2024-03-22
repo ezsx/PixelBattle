@@ -7,7 +7,7 @@ from common.app.db.api_db import clear_db
 from common.app.db.db_pool import init_pool
 from common.app.core.config import config as cfg_c
 
-uri = "ws://localhost:8000/ws/"
+uri = "wss://pixel-battle.k-lab.su/ws/"
 fake = Faker()
 
 
@@ -16,7 +16,7 @@ fake = Faker()
 # pytest websocket_users_sumulation_test.py
 
 
-async def send_and_receive(websocket, message, expected_responses_count=10000, timeout=3):
+async def send_and_receive(websocket, message, expected_responses_count=1000000, timeout=3):
     print(f"Sending to server: {message}")  # Отправка сообщения серверу
     await websocket.send(message)
 
@@ -80,8 +80,8 @@ async def perform_user_actions(user_id, nickname, x, y, color, selection_x, sele
 
 @pytest.mark.asyncio
 async def test_multiple_users_actions_simultaneously():
-    await init_pool(cfg=cfg_c)
-    await clear_db()
+    # await init_pool(cfg=cfg_c)
+    # await clear_db()
 
     async def user_workflow():
         # Генерация случайных данных для пользователя
@@ -101,5 +101,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color, selection_x, selection_y)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(3)]
+    tasks = [user_workflow() for _ in range(10)]
     await asyncio.gather(*tasks)

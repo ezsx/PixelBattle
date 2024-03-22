@@ -102,8 +102,13 @@ class ConnectionManager:
         active_connections_gauge.set(len(self.active_connections))
         if nickname:
             await self.broadcast_selection_update(nickname, None)
-        # if websocket.client_state == WebSocketState.CONNECTED:
-        #     await websocket.close(code=code, reason=reason)
+
+        try:
+            if websocket.client_state == WebSocketState.CONNECTED:
+                await websocket.close(code=code, reason=reason)
+                websocket.client_state = WebSocketState.DISCONNECTED
+        except RuntimeError as e:
+            print(f"RuntimeError: {e}", flush=True)
         await self.broadcast_online_count()
         await self.broadcast_users_info()
 

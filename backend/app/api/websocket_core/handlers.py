@@ -6,7 +6,7 @@ from fastapi import WebSocket
 from backend.app.schemas.admin.admin_requests import AdminPixelInfoRequest, AdminBanUserRequest, AdminResetGameRequest
 from backend.app.schemas.admin.admin_respones import AdminPixelInfoResponse
 from backend.app.schemas.data_models import PixelData, PositionData, SelectionData, FieldStateData
-from backend.app.schemas.user.user_requests import SelectionUpdateRequest, PixelUpdateRequest, DisconnectRequest
+from backend.app.schemas.user.user_requests import SelectionUpdateRequest, DisconnectRequest
 from backend.app.schemas.user.user_respones import OnlineCountResponse, ChangeCooldownResponse, FieldStateResponse, \
     ErrorResponse, SuccessResponse
 from common.app.core.config import config as cfg
@@ -45,7 +45,7 @@ async def handle_send_field_state(websocket: WebSocket):
     cooldown = cfg.COOLDOWN
 
     raw_pixels = await get_pixels()
-    raw_selections = manager.selections.copy()
+    raw_selections = manager.selections
 
     pixels = [PixelData(position=PositionData(**pixel), color=pixel["color"], nickname=pixel["nickname"]) for pixel in
               raw_pixels]
@@ -91,8 +91,9 @@ async def handle_ban_user(websocket: WebSocket, request: AdminBanUserRequest):
 async def handle_reset_game(websocket: WebSocket, request: AdminResetGameRequest):
     await clear_db_admin()
     cfg.FIELD_SIZE = request.data
-    manager.disconnect_everyone()
+    await manager.disconnect_everyone()
     await send_text_metric(websocket, SuccessResponse(data="Game reset").json())
+
 
 async def handle_get_online_info_admin(websocket: WebSocket):
     await manager.broadcast_users_info()

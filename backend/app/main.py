@@ -24,7 +24,7 @@ Instrumentator().instrument(app).expose(app, include_in_schema=False, should_gzi
 
 """
 Add CORS middleware support
-The middleware responds to certain types of HTTP requests. It adds appropriate CORS headers to the response
+The middleware responds to certain types of HTTP admin_requests.py. It adds appropriate CORS headers to the response
 CORS or "Cross-Origin Resource Sharing" refers to situations when a frontend running in a browser has JavaScript code
 that communicates with a backend, and the backend is in a different "origin" than the frontend.
 """

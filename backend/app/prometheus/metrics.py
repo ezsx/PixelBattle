@@ -1,7 +1,7 @@
 from prometheus_client import Gauge, Counter
 
 # Создание метрики для отслеживания активных подключений
-active_connections_gauge = Gauge('active_websocket_connections', 'Number of active websocket connections')
+active_connections_gauge = Gauge('active_websocket_connections', 'Number of active websocket_core connections')
 
 # Создаем счетчики для отправленных и полученных сообщений
 ws_messages_sent = Counter('ws_messages_sent', 'Number of WebSocket messages sent')

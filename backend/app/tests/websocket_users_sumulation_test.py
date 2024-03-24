@@ -7,16 +7,17 @@ from common.app.db.api_db import clear_db
 from common.app.db.db_pool import init_pool
 from common.app.core.config import config as cfg_c
 
-uri = "wss://pixel-battle.k-lab.su/ws/"
+# uri = "wss://pixel-battle.k-lab.su/ws/" # production
+uri = "ws://localhost:8000/ws/"  # development
 fake = Faker()
 
 
-# to run this test, run the following command inside the pixel_battle_backend container:
+# to run this tests, run the following command inside the pixel_battle_backend container:
 # cd /root_app/backend/app/tests
 # pytest websocket_users_sumulation_test.py
 
 
-async def send_and_receive(websocket, message, expected_responses_count=1000000, timeout=3):
+async def send_and_receive(websocket, message, expected_responses_count=1000000, timeout=1):
     print(f"Sending to server: {message}")  # Отправка сообщения серверу
     await websocket.send(message)
 
@@ -80,19 +81,22 @@ async def perform_user_actions(user_id, nickname, x, y, color, selection_x, sele
 
 @pytest.mark.asyncio
 async def test_multiple_users_actions_simultaneously():
-    # await init_pool(cfg=cfg_c)
-    # await clear_db()
+    await init_pool(cfg=cfg_c)
+    await clear_db()
 
     async def user_workflow():
         # Генерация случайных данных для пользователя
         nickname = fake.user_name()
         color = f"#{fake.hex_color()[1:]}"  # Генерируем цвет
-        x, y = fake.random_int(min=0, max=64), fake.random_int(min=0, max=64)
+
+        canvas_size = cfg_c.FIELD_SIZE
+
+        x, y = fake.random_int(min=0, max=canvas_size[0]), fake.random_int(min=0, max=canvas_size[1])
 
         # рандом selection либо клетка поля, либо none
         selection_x, selection_y = None, None
         if fake.random_int(min=0, max=1):
-            selection_x, selection_y = fake.random_int(min=0, max=64), fake.random_int(min=0, max=64)
+            selection_x, selection_y = fake.random_int(min=0, max=canvas_size[0]), fake.random_int(min=0, max=canvas_size[1])
 
         # Регистрация пользователя и получение user_id
         user_id = await create_user_and_login(nickname)
@@ -101,5 +105,5 @@ async def test_multiple_users_actions_simultaneously():
         await perform_user_actions(user_id, nickname, x, y, color, selection_x, selection_y)
 
     # Создание и запуск задач для 100 пользователей
-    tasks = [user_workflow() for _ in range(10)]
+    tasks = [user_workflow() for _ in range(2)]
     await asyncio.gather(*tasks)

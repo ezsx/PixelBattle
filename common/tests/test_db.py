@@ -13,8 +13,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-# run test command, to run inside backend.docker container:
-# python -c "import common.test.test_db"
+# run tests command, to run inside backend.docker container:
+# python -c "import common.tests.test_db"
 
 
 @pytest.fixture

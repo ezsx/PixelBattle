@@ -10,7 +10,6 @@ from psycopg.rows import dict_row
 
 @get_pool_cur
 async def clear_db(cur: Cursor):
-    # Удаление всех записей из таблиц, начиная с таблицы, не имеющей внешних ключей
     await cur.execute("DELETE FROM pixels;")
     await cur.execute("DELETE FROM admins;")
     await cur.execute("DELETE FROM users;")

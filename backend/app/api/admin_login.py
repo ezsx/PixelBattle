@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 from jose import jwt
 from passlib.context import CryptContext
 
-from backend.app.schemas.schemas import AdminLoginHTTP
+from backend.app.schemas.admin.admin_requests import AdminLoginHTTPRequest
 from common.app.core.config import config as cfg
 from common.app.db.api_db import create_admin
 
@@ -35,7 +35,7 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 
 
 @router.post("/login")
-async def login_for_access_token(form_data: AdminLoginHTTP):
+async def login_for_access_token(form_data: AdminLoginHTTPRequest):
     user = authenticate_admin(form_data.username, form_data.password)
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect username or password")

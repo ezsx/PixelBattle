@@ -86,7 +86,6 @@ class ConnectionManager:
         for connection, _ in self.active_connections:
             await connection.close(code=1001, reason="Server shutdown")
         self.active_connections.clear()
-        self.admin_connections.clear()
         self.nicknames.clear()
         self.selections.clear()
 

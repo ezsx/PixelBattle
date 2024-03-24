@@ -17,11 +17,8 @@ from backend.app.api.websocket_core.handlers import (
 from backend.app.api.websocket_core.metrics_handler import send_text_metric, receive_text_metric
 from backend.app.schemas.admin.admin_requests import AdminPixelUpdateRequest, AdminPixelInfoRequest, \
     AdminBanUserRequest, AdminChangeCooldownRequest, AdminResetGameRequest
-from backend.app.schemas.user.user_requests import PixelUpdateRequest, SelectionUpdateRequest, DisconnectRequest, \
-    GetFieldStateRequest, GetOnlineCountRequest, GetCooldownRequest
-from backend.app.schemas.user.user_respones import SuccessResponse, ChangeCooldownResponse, ErrorResponse
-
-from common.app.core.config import config as cfg
+from backend.app.schemas.user.user_requests import PixelUpdateRequest, SelectionUpdateRequest, DisconnectRequest
+from backend.app.schemas.user.user_respones import SuccessResponse, ErrorResponse
 
 app_ws = FastAPI()
 
@@ -62,28 +59,36 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
     message_data = json.loads(message)
     message_type = message_data.get('type')
 
+    async def access_denied(ws: WebSocket):
+        await ws.send_text(ErrorResponse(message="Access denied").json())
+
     # Словарь обработчиков сообщений
     message_handlers = {
         "disconnect": lambda ws, md, u: handle_disconnect(ws, DisconnectRequest(**md)),
         "update_pixel": lambda ws, md, u: handle_update_pixel(ws, PixelUpdateRequest(**md), u, permission=False),
-        "update_selection": lambda ws, md, u: handle_selection_update(SelectionUpdateRequest(**md), u),
+        "update_selection": lambda ws, md, u: handle_selection_update(ws, SelectionUpdateRequest(**md), u),
         "get_field_state": lambda ws, md, u: handle_send_field_state(ws),
         "get_online_count": lambda ws, md, u: handle_online_count(ws),
         "get_cooldown": lambda ws, md, u: handle_send_cooldown(ws),
         # Административные обработчики
         "update_pixel_admin": lambda ws, md, u: handle_update_pixel(ws, AdminPixelUpdateRequest(**md), u,
-                                                                    permission=True),
-        "pixel_info_admin": lambda ws, md, u: handle_pixel_info(ws, AdminPixelInfoRequest(**md)),
-        "toggle_ban_user_admin": lambda ws, md, u: handle_ban_user(ws, AdminBanUserRequest(**md)),
+                                                                    permission=True) if admin else access_denied(ws),
+        "pixel_info_admin": lambda ws, md, u: handle_pixel_info(ws, AdminPixelInfoRequest(
+            **md)) if admin else access_denied(ws),
+        "toggle_ban_user_admin": lambda ws, md, u: handle_ban_user(ws, AdminBanUserRequest(
+            **md)) if admin else access_denied(ws),
         "update_cooldown_admin": lambda ws, md, u: handle_change_cooldown(
-            AdminChangeCooldownRequest(**md).data),
-        "reset_game_admin": lambda ws, md, u: handle_reset_game(ws, AdminResetGameRequest(**md)),
+            AdminChangeCooldownRequest(**md).data) if admin else access_denied(ws),
+        "reset_game_admin": lambda ws, md, u: handle_reset_game(ws, AdminResetGameRequest(
+            **md)) if admin else access_denied(ws),
     }
 
     try:
         if message_type in message_handlers and (message_handlers[message_type] is not None):
-            await message_handlers[message_type](websocket, message_data, user)
+            handler = message_handlers[message_type]
+            if callable(handler):  # Проверяем, является ли обработчик вызываемым объектом
+                await handler(websocket, message_data, user)
         else:
-            print("Unknown message type or insufficient permissions for admin actions")
+            await websocket.send_text("Unknown message type or action not allowed.")
     except ValidationError as e:
         await websocket.send_text(ErrorResponse(message=str(e)).json())

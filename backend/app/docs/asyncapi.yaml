@@ -1,16 +1,277 @@
-asyncapi: 2.6.0
-
+asyncapi: 3.0.0
 info:
-  title: AsyncAPI
+  title: Game Websocket API
   version: 1.0.0
-  description: This is a sample AsyncAPI definition.
-  license:
-    name: Apache 2.0
-    url: https://www.apache.org/licenses/LICENSE-2.0.html
-  contact:
-    name: API Support
-    url: https://www.example.com/support
-    email: scdcor@gmail.com
-
+  description: |
+    This document describes the websocket API for real-time interaction between
+    clients and the server in the game application.
+servers:
+  production:
+    host: game.example.com
+    protocol: wss
+    description: Secure websocket server for the game
 channels:
-  {}
+  /:
+    address: /
+    messages:
+      sendMessages.message.0:
+        $ref: '#/components/messages/loginRequest'
+      sendMessages.message.1:
+        $ref: '#/components/messages/adminLoginRequest'
+      sendMessages.message.2:
+        $ref: '#/components/messages/pixelUpdateRequest'
+      sendMessages.message.3:
+        $ref: '#/components/messages/pixelInfoRequest'
+      sendMessages.message.4:
+        $ref: '#/components/messages/changeCooldownRequest'
+      sendMessages.message.5:
+        $ref: '#/components/messages/resetGameRequest'
+      sendMessages.message.6:
+        $ref: '#/components/messages/banUserRequest'
+      receiveMessages.message.0:
+        $ref: '#/components/messages/pixelUpdateResponse'
+      receiveMessages.message.1:
+        $ref: '#/components/messages/cooldownUpdateNotification'
+      receiveMessages.message.2:
+        $ref: '#/components/messages/gameResetNotification'
+      receiveMessages.message.3:
+        $ref: '#/components/messages/fieldStateResponse'
+    description: Main websocket channel for communication
+operations:
+  sendMessages:
+    action: receive
+    channel:
+      $ref: '#/channels/~1'
+    summary: Send messages to the server
+    messages:
+      - $ref: '#/channels/~1/messages/sendMessages.message.0'
+      - $ref: '#/channels/~1/messages/sendMessages.message.1'
+      - $ref: '#/channels/~1/messages/sendMessages.message.2'
+      - $ref: '#/channels/~1/messages/sendMessages.message.3'
+      - $ref: '#/channels/~1/messages/sendMessages.message.4'
+      - $ref: '#/channels/~1/messages/sendMessages.message.5'
+      - $ref: '#/channels/~1/messages/sendMessages.message.6'
+  receiveMessages:
+    action: send
+    channel:
+      $ref: '#/channels/~1'
+    summary: Receive messages from the server
+    messages:
+      - $ref: '#/channels/~1/messages/receiveMessages.message.0'
+      - $ref: '#/channels/~1/messages/receiveMessages.message.1'
+      - $ref: '#/channels/~1/messages/receiveMessages.message.2'
+      - $ref: '#/channels/~1/messages/receiveMessages.message.3'
+components:
+  messages:
+    pixelUpdateResponse:
+      name: pixelUpdateResponse
+      title: Pixel Update Notification
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - pixel_update_notification
+          data:
+            type: object
+            properties:
+              x:
+                type: integer
+              'y':
+                type: integer
+              color:
+                type: string
+                format: hex
+              nickname:
+                type: string
+    loginRequest:
+      name: LoginRequest
+      title: Login Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - login
+          nickname:
+            type: string
+    adminLoginRequest:
+      name: AdminLoginRequest
+      title: Admin Login Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - login_admin
+          token:
+            type: string
+    cooldownUpdateNotification:
+      name: CooldownUpdateNotification
+      title: Cooldown Update Notification
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - cooldown_update_notification
+          data:
+            type: integer
+            description: The new cooldown time in seconds.
+    gameResetNotification:
+      name: GameResetNotification
+      title: Game Reset Notification
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - game_reset_notification
+    fieldStateResponse:
+      name: FieldStateResponse
+      title: Field State Response
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - field_state_response
+          size:
+            type: array
+            items:
+              type: integer
+          cooldown:
+            type: integer
+          data:
+            type: object
+            properties:
+              pixels:
+                type: array
+                items:
+                  Pixel:
+                    type: object
+                    properties:
+                      x:
+                        type: integer
+                      'y':
+                        type: integer
+                      color:
+                        type: string
+                        format: hex
+                      nickname:
+                        type: string
+              selections:
+                type: array
+                items:
+                  Selection:
+                    type: object
+                    properties:
+                      x:
+                        type: integer
+                      'y':
+                        type: integer
+                      color:
+                        type: string
+                        format: hex
+                      nickname:
+                        type: string
+    pixelUpdateRequest:
+      name: PixelUpdateRequest
+      title: Pixel Update Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - update_pixel
+          data:
+            type: object
+            properties:
+              x:
+                type: integer
+              'y':
+                type: integer
+              color:
+                type: string
+                format: hex
+    pixelInfoRequest:
+      name: PixelInfoRequest
+      title: Pixel Info Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - pixel_info
+          data:
+            type: object
+            properties:
+              x:
+                type: integer
+              'y':
+                type: integer
+    changeCooldownRequest:
+      name: ChangeCooldownRequest
+      title: Change Cooldown Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - update_cooldown_admin
+          data:
+            type: integer
+    resetGameRequest:
+      name: ResetGameRequest
+      title: Reset Game Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - reset_game_admin
+          data:
+            type: object
+            properties:
+              size:
+                  type: array
+              items:
+                  type: integer
+              cooldown:
+                type: integer
+    banUserRequest:
+      name: BanUserRequest
+      title: Ban User Request
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            enum:
+              - toggle_ban_user_admin
+          data:
+            type: object
+            properties:
+              user_id:
+                type: string

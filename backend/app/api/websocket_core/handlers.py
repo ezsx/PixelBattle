@@ -18,8 +18,10 @@ from backend.app.api.websocket_core.connection_manager import manager
 async def handle_disconnect(websocket: WebSocket, request: DisconnectRequest):
     await manager.disconnect(websocket, code=request.data.code, reason=request.data.reason)
 
+
 async def handle_send_cooldown(websocket: WebSocket):
     await send_text_metric(websocket, ChangeCooldownResponse(data=cfg.COOLDOWN).json())
+
 
 async def handle_online_count(websocket: WebSocket):
     online_count = len(manager.active_connections)
@@ -31,7 +33,10 @@ async def handle_change_cooldown(data: int):
     await manager.broadcast(ChangeCooldownResponse(data=data).json())
 
 
-async def handle_selection_update(request: SelectionUpdateRequest, user: Tuple[str, str]):
+async def handle_selection_update(websocket: WebSocket, request: SelectionUpdateRequest, user: Tuple[str, str]):
+    if not (0 <= request.data.position.x < cfg.FIELD_SIZE[0] and 0 <= request.data.position.y < cfg.FIELD_SIZE[1]):
+        await websocket.send_text(ErrorResponse(message="Invalid selection coordinates").json())
+        return
     await manager.update_selection(user[0], request.data.position)
 
 

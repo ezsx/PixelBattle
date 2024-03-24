@@ -90,7 +90,6 @@ async def handle_ban_user(websocket: WebSocket, request: AdminBanUserRequest):
 
 async def handle_reset_game(websocket: WebSocket, request: AdminResetGameRequest):
     await clear_db_admin()
-    manager.selections = {}
-    manager.nicknames = {}
     cfg.FIELD_SIZE = request.data
+    manager.disconnect_everyone()
     await send_text_metric(websocket, SuccessResponse(data="Game reset").json())

@@ -85,8 +85,6 @@ class ConnectionManager:
     async def disconnect_everyone(self):
         for connection, _ in self.active_connections:
             await connection.close(code=1001, reason="Server shutdown")
-        for admin in self.admin_connections:
-            await admin.close(code=1001, reason="Server shutdown")
         self.active_connections.clear()
         self.admin_connections.clear()
         self.nicknames.clear()

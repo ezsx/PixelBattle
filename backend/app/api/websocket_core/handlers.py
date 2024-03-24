@@ -45,7 +45,7 @@ async def handle_send_field_state(websocket: WebSocket):
     cooldown = cfg.COOLDOWN
 
     raw_pixels = await get_pixels()
-    raw_selections = manager.selections
+    raw_selections = manager.selections.copy()
 
     pixels = [PixelData(position=PositionData(**pixel), color=pixel["color"], nickname=pixel["nickname"]) for pixel in
               raw_pixels]

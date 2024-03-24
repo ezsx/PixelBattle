@@ -12,7 +12,7 @@ from backend.app.api.websocket_core.connection_manager import manager
 from backend.app.api.websocket_core.handlers import (
     handle_update_pixel, handle_selection_update, handle_send_field_state, handle_online_count,
     handle_change_cooldown, handle_pixel_info, handle_ban_user, handle_reset_game, handle_disconnect,
-    handle_send_cooldown,
+    handle_send_cooldown, handle_get_online_info_admin,
 )
 from backend.app.api.websocket_core.metrics_handler import send_text_metric, receive_text_metric
 from backend.app.schemas.admin.admin_requests import AdminPixelUpdateRequest, AdminPixelInfoRequest, \
@@ -81,6 +81,7 @@ async def process_message(websocket: WebSocket, message: str, user: Tuple[str, s
             AdminChangeCooldownRequest(**md).data) if admin else access_denied(ws),
         "reset_game_admin": lambda ws, md, u: handle_reset_game(ws, AdminResetGameRequest(
             **md)) if admin else access_denied(ws),
+        "get_online_info_admin": lambda ws, md, u: handle_get_online_info_admin(ws) if admin else access_denied(ws),
     }
 
     try:

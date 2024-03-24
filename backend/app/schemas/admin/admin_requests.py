@@ -29,6 +29,17 @@ class AdminLoginHTTPRequest(BaseModel):
         }
 
 
+class AdminGetOnlineUsersRequest(BaseMessage):
+    type: str = Field(default="get_online_users_admin")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "type": "get_online_users_admin"
+            }
+        }
+
+
 class AdminChangeCooldownRequest(BaseModel):
     type: str = Field(default="update_cooldown_admin")
     data: int

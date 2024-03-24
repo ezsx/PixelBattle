@@ -93,3 +93,7 @@ async def handle_reset_game(websocket: WebSocket, request: AdminResetGameRequest
     cfg.FIELD_SIZE = request.data
     manager.disconnect_everyone()
     await send_text_metric(websocket, SuccessResponse(data="Game reset").json())
+
+async def handle_get_online_info_admin(websocket: WebSocket):
+    await manager.broadcast_users_info()
+    await send_text_metric(websocket, SuccessResponse(data="Users info sent").json())

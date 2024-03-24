@@ -54,7 +54,7 @@ class ConnectionManager:
         nickname = self.nicknames.pop(websocket, None)
         if nickname:
             await self.broadcast_selection_update(nickname, None)
-            self.selections.pop(nickname, None)
+            await self.selections.pop(nickname, None)
         try:
             if websocket.client_state == WebSocketState.CONNECTED:
                 await websocket.close(code=code, reason=reason)

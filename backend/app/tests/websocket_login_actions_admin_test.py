@@ -37,8 +37,10 @@ async def send_and_receive(websocket, message, expected_responses_count=10, time
 
 
 async def create_user_get_admin_token_and_ban_user():
-    uri = "ws://localhost:8000/ws/"
-    fastapi_server_url = "http://localhost:8000"
+    uri = "wss://pixel-battle.k-lab.su/ws/" # production
+    fastapi_server_url = "https://pixel-battle.k-lab.su"
+    # uri = "ws://localhost:8000/ws/" # development
+    # fastapi_server_url = "http://localhost:8000"
 
     # Создание пользователя через WebSocket
     async with websockets.connect(uri) as websocket:
@@ -117,7 +119,7 @@ async def create_user_get_admin_token_and_ban_user():
         # Сброс игры
         await send_and_receive(websocket, json.dumps({
             "type": "reset_game_admin",
-            "data": (64, 64)
+            "data": (128, 128)
         }), )
         # обрабатываем отключение админа
         await websocket.close()
@@ -126,6 +128,6 @@ async def create_user_get_admin_token_and_ban_user():
 @pytest.mark.asyncio
 async def test_run():
     # TODO: исправить инициализацию пула базы
-    await init_pool(cfg=cfg_c)
-    await clear_db()
+    # await init_pool(cfg=cfg_c)
+    # await clear_db()
     await create_user_get_admin_token_and_ban_user()
